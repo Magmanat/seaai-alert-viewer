@@ -55,6 +55,12 @@ async def get_state() -> dict:
     return await memory_state.build_snapshot()
 
 
+@app.post("/api/alerts/clear")
+async def clear_alerts() -> dict:
+    await memory_state.clear_panel_alerts()
+    return {"cleared": True}
+
+
 @app.get("/api/snapshots/{group_id}/{kind}")
 async def get_snapshot(group_id: str, kind: str) -> Response:
     asset = await memory_state.get_snapshot_asset(group_id, kind)

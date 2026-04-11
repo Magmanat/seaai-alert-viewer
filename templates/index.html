@@ -23,8 +23,10 @@
           </div>
         </header>
         <div id="map-root" class="mapContainer">
-          <svg id="map-svg" class="mapSvg" aria-hidden="true"></svg>
-          <div id="map-overlay" class="mapOverlay"></div>
+          <div id="map-stage" class="mapStage">
+            <svg id="map-svg" class="mapSvg" aria-hidden="true"></svg>
+            <div id="map-overlay" class="mapOverlay"></div>
+          </div>
           <div class="compass" aria-hidden="true">
             <svg viewBox="0 0 40 40" class="compassSvg">
               <circle cx="20" cy="20" r="18" class="compassBg" />
@@ -47,6 +49,12 @@
               <div id="alert-count" class="countBadge">0</div>
             </div>
             <div class="headerActions">
+              <button id="push-demo-alert" class="headerActionButton" type="button">
+                Push demo alert
+              </button>
+              <button id="clear-alerts" class="clearAlertsButton" type="button">
+                Clear alerts
+              </button>
               <div id="status-pill" class="statusPill disconnected">
                 <span class="statusDot"></span>
                 <span id="status-label">Disconnected</span>

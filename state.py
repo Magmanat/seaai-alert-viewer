@@ -111,6 +111,15 @@ class MemoryState:
         async with self._lock:
             return self._build_snapshot_locked()
 
+    async def clear_panel_alerts(self) -> None:
+        async with self._lock:
+            self._panel_alerts.clear()
+            self._prune_unused_snapshots_locked()
+            snapshot = self._build_snapshot_locked()
+            subscribers = list(self._subscribers)
+
+        self._broadcast(subscribers, snapshot)
+
     async def get_snapshot_asset(
         self, group_id: str, kind: str
     ) -> SnapshotAsset | None:

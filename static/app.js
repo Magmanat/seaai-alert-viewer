@@ -3,15 +3,37 @@ const state = {
   lastAlertsSignature: "",
   modalAlertId: null,
   modalView: null,
+  hasInitializedAlerts: false,
+  knownAlertIds: new Set(),
+  alertAudioContext: null,
+  alertAudioBuffer: null,
+  alertAudioLoadingPromise: null,
+  alertAudioReady: false,
+  mapView: {
+    scale: 1,
+    minScale: 1,
+    maxScale: 5,
+    translateX: 0,
+    translateY: 0,
+    pointerId: null,
+    panStartX: 0,
+    panStartY: 0,
+    originTranslateX: 0,
+    originTranslateY: 0,
+    dragMoved: false,
+  },
 };
 
 const mapRoot = document.getElementById("map-root");
+const mapStage = document.getElementById("map-stage");
 const mapSvg = document.getElementById("map-svg");
 const mapOverlay = document.getElementById("map-overlay");
 const mapEmpty = document.getElementById("map-empty");
 const alertsList = document.getElementById("alerts-list");
 const alertsEmpty = document.getElementById("alerts-empty");
 const alertCount = document.getElementById("alert-count");
+const pushDemoAlertButton = document.getElementById("push-demo-alert");
+const clearAlertsButton = document.getElementById("clear-alerts");
 const trackCount = document.getElementById("track-count");
 const statusPill = document.getElementById("status-pill");
 const statusLabel = document.getElementById("status-label");
@@ -27,6 +49,116 @@ const modalBoundingBox = document.getElementById("modal-bounding-box");
 const modalEmpty = document.getElementById("modal-empty");
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+const ALERT_SOUND_URL = "/static/assets/alert_sound.mp3";
+
+function getAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    return null;
+  }
+
+  if (!state.alertAudioContext) {
+    state.alertAudioContext = new AudioContextClass();
+  }
+
+  return state.alertAudioContext;
+}
+
+async function unlockAlertAudio() {
+  const context = getAudioContext();
+  if (!context) {
+    return;
+  }
+
+  try {
+    if (context.state === "suspended") {
+      await context.resume();
+    }
+    state.alertAudioReady = context.state === "running";
+    if (state.alertAudioReady) {
+      void loadAlertAudioBuffer();
+    }
+  } catch {
+    state.alertAudioReady = false;
+  }
+}
+
+async function loadAlertAudioBuffer() {
+  const context = getAudioContext();
+  if (!context) {
+    return null;
+  }
+
+  if (state.alertAudioBuffer) {
+    return state.alertAudioBuffer;
+  }
+  if (state.alertAudioLoadingPromise) {
+    return state.alertAudioLoadingPromise;
+  }
+
+  state.alertAudioLoadingPromise = fetch(ALERT_SOUND_URL)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load alert sound (${response.status})`);
+      }
+      return response.arrayBuffer();
+    })
+    .then((arrayBuffer) => context.decodeAudioData(arrayBuffer.slice(0)))
+    .then((audioBuffer) => {
+      state.alertAudioBuffer = audioBuffer;
+      return audioBuffer;
+    })
+    .catch(() => null)
+    .finally(() => {
+      state.alertAudioLoadingPromise = null;
+    });
+
+  return state.alertAudioLoadingPromise;
+}
+
+async function playAlertDing() {
+  const context = getAudioContext();
+  if (!context || !state.alertAudioReady) {
+    return;
+  }
+  if (context.state === "suspended") {
+    try {
+      await context.resume();
+    } catch {
+      return;
+    }
+  }
+  if (context.state !== "running") {
+    return;
+  }
+
+  const audioBuffer = await loadAlertAudioBuffer();
+  if (!audioBuffer) {
+    return;
+  }
+
+  const source = context.createBufferSource();
+  const gain = context.createGain();
+  gain.gain.value = 0.75;
+  source.buffer = audioBuffer;
+  source.connect(gain);
+  gain.connect(context.destination);
+  source.start();
+}
+
+function syncAlertNotifications(alerts) {
+  const nextAlertIds = new Set(alerts.map((alert) => alert.id));
+  const hasNewAlerts =
+    state.hasInitializedAlerts &&
+    alerts.some((alert) => !state.knownAlertIds.has(alert.id));
+
+  state.knownAlertIds = nextAlertIds;
+  state.hasInitializedAlerts = true;
+
+  if (hasNewAlerts) {
+    void playAlertDing();
+  }
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -72,6 +204,70 @@ function updateStatus(snapshot) {
   statusPill.classList.toggle("disconnected", !connected);
   statusLabel.textContent = connected ? "Connected" : "Disconnected";
   lastMessage.textContent = formatLastMessage(snapshot);
+  clearAlertsButton.disabled = !snapshot?.alerts?.length;
+}
+
+async function clearAlerts() {
+  if (clearAlertsButton.disabled) {
+    return;
+  }
+
+  clearAlertsButton.disabled = true;
+  try {
+    const response = await fetch("/api/alerts/clear", { method: "POST" });
+    if (!response.ok) {
+      throw new Error(`Failed to clear alerts (${response.status})`);
+    }
+  } catch (error) {
+    clearAlertsButton.disabled = !(state.snapshot?.alerts || []).length;
+    window.alert(error instanceof Error ? error.message : "Failed to clear alerts");
+  }
+}
+
+async function pushDemoAlert() {
+  if (pushDemoAlertButton.disabled) {
+    return;
+  }
+
+  pushDemoAlertButton.disabled = true;
+
+  const payload = {
+    datetime: new Date().toISOString(),
+    objects: [
+      {
+        track_id: "1",
+        classification: "VESSEL",
+        bearing_identification: "APPROACHING",
+        confidence_level: 0.92,
+        position_history: [
+          [800, 2],
+          [700, 1],
+          [600, 0],
+          [500, -1],
+        ],
+        position: [400, 0],
+      },
+    ],
+  };
+
+  try {
+    const response = await fetch("/api/mock-alert", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to push demo alert (${response.status})`);
+    }
+  } catch (error) {
+    window.alert(
+      error instanceof Error ? error.message : "Failed to push demo alert",
+    );
+  } finally {
+    pushDemoAlertButton.disabled = false;
+  }
 }
 
 function getAlertById(alertId) {
@@ -214,6 +410,7 @@ function initializeAlertMedia() {
 
 function renderAlerts() {
   const alerts = state.snapshot?.alerts || [];
+  syncAlertNotifications(alerts);
   const signature = alerts
     .map((alert) => {
       const bbox = Array.isArray(alert.boundingBox)
@@ -320,12 +517,63 @@ function appendSvgElement(tag, attributes) {
   return node;
 }
 
+function clampMapTranslation(scale, translateX, translateY) {
+  const width = mapRoot.clientWidth || 1;
+  const height = mapRoot.clientHeight || 1;
+  const scaledWidth = width * scale;
+  const scaledHeight = height * scale;
+
+  const minX =
+    scaledWidth > width ? width - scaledWidth : (width - scaledWidth) / 2;
+  const maxX = scaledWidth > width ? 0 : (width - scaledWidth) / 2;
+  const minY =
+    scaledHeight > height ? height - scaledHeight : (height - scaledHeight) / 2;
+  const maxY = scaledHeight > height ? 0 : (height - scaledHeight) / 2;
+
+  return {
+    x: Math.min(maxX, Math.max(minX, translateX)),
+    y: Math.min(maxY, Math.max(minY, translateY)),
+  };
+}
+
+function applyMapTransform() {
+  const { scale, translateX, translateY } = state.mapView;
+  const clamped = clampMapTranslation(scale, translateX, translateY);
+  state.mapView.translateX = clamped.x;
+  state.mapView.translateY = clamped.y;
+  mapStage.style.transform = `translate(${clamped.x}px, ${clamped.y}px) scale(${scale})`;
+  mapRoot.style.setProperty("--marker-scale", getMarkerScale().toFixed(3));
+}
+
+function getMarkerScale() {
+  const zoomScale = state.mapView.scale || 1;
+  return 1.12 / zoomScale;
+}
+
+function renderBearingArrowMarkup(bearing) {
+  if (bearing === "Approaching") {
+    return '<span class="bearingArrow vertical down" aria-hidden="true"></span>';
+  }
+  if (bearing === "Departing") {
+    return '<span class="bearingArrow vertical up" aria-hidden="true"></span>';
+  }
+  if (bearing === "Lateral Crossing") {
+    return [
+      '<span class="bearingArrow horizontal left" aria-hidden="true"></span>',
+      '<span class="bearingArrow horizontal right" aria-hidden="true"></span>',
+    ].join("");
+  }
+  return "";
+}
+
 function renderMap() {
   const snapshot = state.snapshot;
   const tracks = snapshot?.tracks || [];
   const maxDistanceM = snapshot?.map?.maxDistanceM || 1000;
   const trackWindowMs = snapshot?.map?.trackWindowMs || 60000;
   const geometry = getGeometry(mapRoot, maxDistanceM);
+
+  applyMapTransform();
 
   trackCount.textContent = String(tracks.length);
   mapEmpty.style.display = tracks.length ? "none" : "block";
@@ -445,6 +693,7 @@ function renderMap() {
       });
 
       const current = mappedPoints[mappedPoints.length - 1];
+      const bearingClass = track.bearing.toLowerCase().replaceAll(" ", "-");
       const marker = document.createElement("div");
       marker.className = "trackedObjectMarker";
       marker.style.left = `${current.x}px`;
@@ -453,15 +702,20 @@ function renderMap() {
       marker.title = `${track.typeLabel} #${track.trackId} | ${track.bearing} | ${track.confidence}%`;
       marker.innerHTML = `
         <div class="trackedObjectContent">
-          <div class="labeledPinWrapper">
-            <div class="markerIconInLabel">
-              <img src="/static/assets/${escapeHtml(track.type)}.svg" class="trackedObjectIcon" alt="${escapeHtml(track.typeLabel)}" />
+          <div class="trackedObjectId">#${escapeHtml(track.trackId)}</div>
+          <div class="trackedObjectVisual bearing-${escapeHtml(bearingClass)}">
+            <div class="trackedObjectBubble">
+              <div class="markerIconInLabel">
+                <img src="/static/assets/${escapeHtml(track.type)}.svg" class="trackedObjectIcon" alt="${escapeHtml(track.typeLabel)}" />
+              </div>
+              <span class="trackedObjectDistance">${Math.round(track.positions[track.positions.length - 1].distance)}m</span>
             </div>
-            <span class="labeledPinDistance">${Math.round(track.positions[track.positions.length - 1].distance)}m</span>
+            ${renderBearingArrowMarkup(track.bearing)}
           </div>
         </div>
       `;
       mapOverlay.appendChild(marker);
+
     });
 }
 
@@ -642,6 +896,31 @@ function closeModal() {
   document.body.classList.remove("modalOpen");
 }
 
+function zoomMap(clientX, clientY, nextScale) {
+  const rect = mapRoot.getBoundingClientRect();
+  const px = clientX - rect.left;
+  const py = clientY - rect.top;
+  const { scale, translateX, translateY, minScale, maxScale } = state.mapView;
+  const clampedScale = Math.min(maxScale, Math.max(minScale, nextScale));
+  if (clampedScale === scale) {
+    return;
+  }
+
+  const worldX = (px - translateX) / scale;
+  const worldY = (py - translateY) / scale;
+  state.mapView.scale = clampedScale;
+  state.mapView.translateX = px - worldX * clampedScale;
+  state.mapView.translateY = py - worldY * clampedScale;
+  applyMapTransform();
+}
+
+function resetMapView() {
+  state.mapView.scale = 1;
+  state.mapView.translateX = 0;
+  state.mapView.translateY = 0;
+  applyMapTransform();
+}
+
 function renderAll() {
   if (!state.snapshot) {
     return;
@@ -680,6 +959,9 @@ alertsList.addEventListener("click", (event) => {
   openModal(card.dataset.alertId);
 });
 
+clearAlertsButton.addEventListener("click", clearAlerts);
+pushDemoAlertButton.addEventListener("click", pushDemoAlert);
+
 alertsList.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") {
     return;
@@ -690,6 +972,70 @@ alertsList.addEventListener("keydown", (event) => {
   }
   event.preventDefault();
   openModal(card.dataset.alertId);
+});
+
+mapRoot.addEventListener(
+  "wheel",
+  (event) => {
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+    zoomMap(event.clientX, event.clientY, state.mapView.scale * delta);
+  },
+  { passive: false },
+);
+
+mapRoot.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) {
+    return;
+  }
+
+  state.mapView.pointerId = event.pointerId;
+  state.mapView.panStartX = event.clientX;
+  state.mapView.panStartY = event.clientY;
+  state.mapView.originTranslateX = state.mapView.translateX;
+  state.mapView.originTranslateY = state.mapView.translateY;
+  state.mapView.dragMoved = false;
+  mapRoot.classList.add("isPanning");
+  mapRoot.setPointerCapture(event.pointerId);
+});
+
+mapRoot.addEventListener("pointermove", (event) => {
+  if (state.mapView.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const dx = event.clientX - state.mapView.panStartX;
+  const dy = event.clientY - state.mapView.panStartY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+    state.mapView.dragMoved = true;
+  }
+
+  if (!state.mapView.dragMoved || state.mapView.scale <= 1) {
+    return;
+  }
+
+  state.mapView.translateX = state.mapView.originTranslateX + dx;
+  state.mapView.translateY = state.mapView.originTranslateY + dy;
+  applyMapTransform();
+});
+
+function stopMapPan(event) {
+  if (state.mapView.pointerId !== event.pointerId) {
+    return;
+  }
+
+  if (mapRoot.hasPointerCapture(event.pointerId)) {
+    mapRoot.releasePointerCapture(event.pointerId);
+  }
+  state.mapView.pointerId = null;
+  mapRoot.classList.remove("isPanning");
+}
+
+mapRoot.addEventListener("pointerup", stopMapPan);
+mapRoot.addEventListener("pointercancel", stopMapPan);
+
+mapRoot.addEventListener("dblclick", () => {
+  resetMapView();
 });
 
 modalOverlay.addEventListener("click", (event) => {
@@ -735,6 +1081,9 @@ window.addEventListener("keydown", (event) => {
     closeModal();
   }
 });
+
+window.addEventListener("pointerdown", unlockAlertAudio, { passive: true });
+window.addEventListener("keydown", unlockAlertAudio);
 
 window.addEventListener("resize", () => {
   renderMap();
