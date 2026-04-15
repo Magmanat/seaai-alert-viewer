@@ -147,7 +147,7 @@ class MemoryState:
 
         decoded_assets: dict[str, SnapshotAsset] = {}
         rgb_asset = _decode_snapshot(snapshots.get("RGB1"))
-        thermal_asset = _decode_snapshot(snapshots.get("T1"))
+        thermal_asset = _decode_snapshot(snapshots.get("T2"))
         if rgb_asset:
             decoded_assets["rgb"] = rgb_asset
         if thermal_asset:

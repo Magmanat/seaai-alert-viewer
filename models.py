@@ -8,6 +8,7 @@ from typing import Any
 
 CLASSIFICATION_MAP = {
     "BOAT": "VESSEL",
+    "HAZARD": "VESSEL",
     "HUMAN_IN_WATER": "SWIMMER",
     "HUMAN_ON_LAND": "HUMAN",
     "VESSEL": "VESSEL",
@@ -125,7 +126,7 @@ def parse_seaai_message(raw_text: str) -> ParsedMessage:
         snapshots={
             key: value
             for key, value in snapshots.items()
-            if key in {"RGB1", "T1"} and isinstance(value, str) and value.strip()
+            if key in {"RGB1", "T2"} and isinstance(value, str) and value.strip()
         },
         events=valid_events,
     )
@@ -158,7 +159,7 @@ def serialize_alert(event: AlertEvent) -> dict[str, Any]:
         else None
     )
     rgb_bounding_box = _serialize_bounding_box(event.bounding_boxes.get("RGB"))
-    thermal_bounding_box = _serialize_bounding_box(event.bounding_boxes.get("T1"))
+    thermal_bounding_box = _serialize_bounding_box(event.bounding_boxes.get("T2"))
     preferred_view = "thermal" if thermal_url else ("rgb" if rgb_url else None)
     thumbnail_url = thermal_url or rgb_url
     thumbnail_bounding_box = thermal_bounding_box or rgb_bounding_box
@@ -290,7 +291,7 @@ def _parse_bounding_boxes(raw_boxes: Any) -> dict[str, list[float]]:
 
     parsed: dict[str, list[float]] = {}
     rgb_box = raw_boxes.get("RGB1")
-    thermal_box = raw_boxes.get("T1")
+    thermal_box = raw_boxes.get("T2")
 
     if isinstance(rgb_box, list) and len(rgb_box) == 4:
         try:
@@ -300,7 +301,7 @@ def _parse_bounding_boxes(raw_boxes: Any) -> dict[str, list[float]]:
 
     if isinstance(thermal_box, list) and len(thermal_box) == 4:
         try:
-            parsed["T1"] = [float(value) for value in thermal_box]
+            parsed["T2"] = [float(value) for value in thermal_box]
         except (TypeError, ValueError):
             pass
 

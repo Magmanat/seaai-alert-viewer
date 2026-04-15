@@ -24,7 +24,7 @@ class Settings:
     app_title: str = _env_str("APP_TITLE", "SEAAI Live Monitor")
     host: str = _env_str("APP_HOST", "127.0.0.1")
     port: int = _env_int("APP_PORT", 8765)
-    seaai_ws_url: str = _env_str("SEAAI_WS_URL", "")
+    seaai_ws_url: str = _env_str("SEAAI_WS_URL", "ws://localhost:8080/test")
     max_panel_alerts: int = _env_int("MAX_PANEL_ALERTS", 50)
     track_window_seconds: int = _env_int("TRACK_WINDOW_SECONDS", 60)
     map_max_distance_m: int = _env_int("MAP_MAX_DISTANCE_M", 1000)

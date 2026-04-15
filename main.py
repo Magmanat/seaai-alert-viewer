@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from state import MemoryState
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 TEMPLATES_DIR = APP_DIR / "templates"
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 memory_state = MemoryState(settings)
 seaai_client = SeaAIWebSocketClient(settings, memory_state)
@@ -53,6 +56,29 @@ async def health() -> dict:
 @app.get("/api/state")
 async def get_state() -> dict:
     return await memory_state.build_snapshot()
+
+
+@app.get("/api/config/upstream-websocket")
+async def get_upstream_websocket_config() -> dict:
+    url = seaai_client.get_ws_url()
+    logging.getLogger(__name__).info("Read upstream websocket URL config: %s", url)
+    return {"url": url}
+
+
+@app.post("/api/config/upstream-websocket")
+async def set_upstream_websocket_config(request: Request) -> dict:
+    payload = await request.json()
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid request body")
+
+    raw_url = payload.get("url", "")
+    if not isinstance(raw_url, str):
+        raise HTTPException(status_code=400, detail="url must be a string")
+
+    logging.getLogger(__name__).info("Received upstream websocket URL update request: %s", raw_url)
+    url = await seaai_client.set_ws_url(raw_url)
+    logging.getLogger(__name__).info("Applied upstream websocket URL update: %s", url)
+    return {"url": url}
 
 
 @app.post("/api/alerts/clear")

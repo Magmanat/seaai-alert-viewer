@@ -9,6 +9,29 @@ const state = {
   alertAudioBuffer: null,
   alertAudioLoadingPromise: null,
   alertAudioReady: false,
+  upstreamUrl: "",
+  filters: {
+    bearing: new Set(),
+    type: new Set(),
+  },
+  modalImageView: {
+    baseScale: 1,
+    fitScale: 1,
+    baseTranslateX: 0,
+    baseTranslateY: 0,
+    scale: 1,
+    minScale: 1,
+    maxScale: 6,
+    translateX: 0,
+    translateY: 0,
+    pointerId: null,
+    panStartX: 0,
+    panStartY: 0,
+    originTranslateX: 0,
+    originTranslateY: 0,
+    dragMoved: false,
+    sourceKey: null,
+  },
   mapView: {
     scale: 1,
     minScale: 1,
@@ -16,6 +39,7 @@ const state = {
     translateX: 0,
     translateY: 0,
     pointerId: null,
+    pointerAlertId: null,
     panStartX: 0,
     panStartY: 0,
     originTranslateX: 0,
@@ -34,6 +58,9 @@ const alertsEmpty = document.getElementById("alerts-empty");
 const alertCount = document.getElementById("alert-count");
 const pushDemoAlertButton = document.getElementById("push-demo-alert");
 const clearAlertsButton = document.getElementById("clear-alerts");
+const upstreamUrlInput = document.getElementById("upstream-url");
+const applyUpstreamUrlButton = document.getElementById("apply-upstream-url");
+const filterPanel = document.getElementById("filter-panel");
 const trackCount = document.getElementById("track-count");
 const statusPill = document.getElementById("status-pill");
 const statusLabel = document.getElementById("status-label");
@@ -50,6 +77,23 @@ const modalEmpty = document.getElementById("modal-empty");
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ALERT_SOUND_URL = "/static/assets/alert_sound.mp3";
+
+function normalizeUpstreamUrl(value) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.startsWith("://")) {
+    return `ws${trimmed}`;
+  }
+  if (trimmed.startsWith("//")) {
+    return `ws:${trimmed}`;
+  }
+  if (!trimmed.includes("://")) {
+    return `ws://${trimmed}`;
+  }
+  return trimmed;
+}
 
 function getAudioContext() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -150,7 +194,10 @@ function syncAlertNotifications(alerts) {
   const nextAlertIds = new Set(alerts.map((alert) => alert.id));
   const hasNewAlerts =
     state.hasInitializedAlerts &&
-    alerts.some((alert) => !state.knownAlertIds.has(alert.id));
+    alerts.some(
+      (alert) =>
+        !state.knownAlertIds.has(alert.id) && matchesActiveFilters(alert),
+    );
 
   state.knownAlertIds = nextAlertIds;
   state.hasInitializedAlerts = true;
@@ -205,6 +252,80 @@ function updateStatus(snapshot) {
   statusLabel.textContent = connected ? "Connected" : "Disconnected";
   lastMessage.textContent = formatLastMessage(snapshot);
   clearAlertsButton.disabled = !snapshot?.alerts?.length;
+}
+
+function matchesFilterValue(activeSet, value) {
+  return activeSet.size === 0 || activeSet.has(value);
+}
+
+function matchesActiveFilters(item) {
+  return (
+    matchesFilterValue(state.filters.bearing, item.bearing) &&
+    matchesFilterValue(state.filters.type, item.type)
+  );
+}
+
+function getFilteredAlerts() {
+  const alerts = state.snapshot?.alerts || [];
+  return alerts.filter(matchesActiveFilters);
+}
+
+function getFilteredTracks() {
+  const tracks = state.snapshot?.tracks || [];
+  return tracks.filter(matchesActiveFilters);
+}
+
+function updateUpstreamUrlInput() {
+  if (document.activeElement !== upstreamUrlInput) {
+    upstreamUrlInput.value = state.upstreamUrl;
+  }
+}
+
+async function loadUpstreamUrl() {
+  const response = await fetch("/api/config/upstream-websocket");
+  if (!response.ok) {
+    throw new Error(`Failed to load websocket URL (${response.status})`);
+  }
+
+  const payload = await response.json();
+  state.upstreamUrl = typeof payload?.url === "string" ? payload.url : "";
+  updateUpstreamUrlInput();
+}
+
+async function applyUpstreamUrl() {
+  const nextUrl = normalizeUpstreamUrl(upstreamUrlInput.value);
+  state.upstreamUrl = nextUrl;
+  updateUpstreamUrlInput();
+  lastMessage.textContent = nextUrl
+    ? `Connecting to ${nextUrl}`
+    : "No messages received yet";
+  applyUpstreamUrlButton.disabled = true;
+
+  try {
+    const response = await fetch("/api/config/upstream-websocket", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url: nextUrl }),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to update websocket URL (${response.status}): ${errorText}`,
+      );
+    }
+
+    const payload = await response.json();
+    state.upstreamUrl = typeof payload?.url === "string" ? payload.url : nextUrl;
+    updateUpstreamUrlInput();
+  } catch (error) {
+    window.alert(
+      error instanceof Error ? error.message : "Failed to update websocket URL",
+    );
+  } finally {
+    applyUpstreamUrlButton.disabled = false;
+  }
 }
 
 async function clearAlerts() {
@@ -409,8 +530,9 @@ function initializeAlertMedia() {
 }
 
 function renderAlerts() {
-  const alerts = state.snapshot?.alerts || [];
-  syncAlertNotifications(alerts);
+  const allAlerts = state.snapshot?.alerts || [];
+  syncAlertNotifications(allAlerts);
+  const alerts = getFilteredAlerts();
   const signature = alerts
     .map((alert) => {
       const bbox = Array.isArray(alert.boundingBox)
@@ -550,6 +672,22 @@ function getMarkerScale() {
   return 1.12 / zoomScale;
 }
 
+function getTrackDotSize() {
+  const zoomScale = state.mapView.scale || 1;
+  return {
+    radius: 3 / zoomScale,
+    strokeWidth: 1 / zoomScale,
+  };
+}
+
+function getTrackTrailStyle() {
+  const zoomScale = state.mapView.scale || 1;
+  return {
+    strokeWidth: 2 / zoomScale,
+    dash: `${(4 / zoomScale).toFixed(2)} ${(4 / zoomScale).toFixed(2)}`,
+  };
+}
+
 function renderBearingArrowMarkup(bearing) {
   if (bearing === "Approaching") {
     return '<span class="bearingArrow vertical down" aria-hidden="true"></span>';
@@ -566,9 +704,17 @@ function renderBearingArrowMarkup(bearing) {
   return "";
 }
 
+function getAlertIdFromTarget(target) {
+  if (!(target instanceof Element)) {
+    return null;
+  }
+
+  return target.closest("[data-alert-id]")?.dataset.alertId || null;
+}
+
 function renderMap() {
   const snapshot = state.snapshot;
-  const tracks = snapshot?.tracks || [];
+  const tracks = getFilteredTracks();
   const maxDistanceM = snapshot?.map?.maxDistanceM || 1000;
   const trackWindowMs = snapshot?.map?.trackWindowMs || 60000;
   const geometry = getGeometry(mapRoot, maxDistanceM);
@@ -680,15 +826,20 @@ function renderMap() {
         class: "trackTrail",
         opacity: opacity.toFixed(2),
       });
+      const trailStyle = getTrackTrailStyle();
+      polyline.style.strokeWidth = `${trailStyle.strokeWidth.toFixed(2)}px`;
+      polyline.style.strokeDasharray = trailStyle.dash;
       polyline.setAttribute("fill", "none");
 
       mappedPoints.slice(0, -1).forEach((point) => {
+        const dotSize = getTrackDotSize();
         appendSvgElement("circle", {
           cx: point.x.toFixed(2),
           cy: point.y.toFixed(2),
-          r: 3,
+          r: dotSize.radius.toFixed(2),
           class: "trackDot",
           opacity: opacity.toFixed(2),
+          style: `stroke-width: ${dotSize.strokeWidth.toFixed(2)}px`,
         });
       });
 
@@ -696,6 +847,7 @@ function renderMap() {
       const bearingClass = track.bearing.toLowerCase().replaceAll(" ", "-");
       const marker = document.createElement("div");
       marker.className = "trackedObjectMarker";
+      marker.dataset.alertId = String(track.id);
       marker.style.left = `${current.x}px`;
       marker.style.top = `${current.y}px`;
       marker.style.opacity = opacity.toFixed(2);
@@ -770,6 +922,32 @@ function applyBoundingBoxStrokeScale(scale) {
   );
 }
 
+function applyModalTransform() {
+  const {
+    baseScale,
+    baseTranslateX,
+    baseTranslateY,
+    scale,
+    translateX,
+    translateY,
+  } = state.modalImageView;
+  const totalScale = baseScale * scale;
+  const totalTranslateX = baseTranslateX + translateX;
+  const totalTranslateY = baseTranslateY + translateY;
+
+  modalZoomWrapper.style.transform = `translate(${totalTranslateX}px, ${totalTranslateY}px) scale(${totalScale})`;
+  applyBoundingBoxStrokeScale(totalScale);
+}
+
+function resetModalImageView() {
+  state.modalImageView.scale = 1;
+  state.modalImageView.translateX = 0;
+  state.modalImageView.translateY = 0;
+  state.modalImageView.pointerId = null;
+  state.modalImageView.dragMoved = false;
+  modalImageContainer.classList.remove("isPanning");
+}
+
 function updateModalLayout() {
   const alert = getAlertById(state.modalAlertId);
   if (!alert || modalOverlay.hidden) {
@@ -792,6 +970,10 @@ function updateModalLayout() {
   let scale;
   let offsetX;
   let offsetY;
+  const fitScale = Math.min(
+    containerWidth / naturalWidth,
+    containerHeight / naturalHeight,
+  );
 
   if (
     Array.isArray(activeMedia.boundingBox) &&
@@ -804,10 +986,6 @@ function updateModalLayout() {
     const targetHeight = containerHeight * 0.5;
     const boxWidthPx = boxWidth * naturalWidth;
     const boxHeightPx = boxHeight * naturalHeight;
-    const fitScale = Math.min(
-      containerWidth / naturalWidth,
-      containerHeight / naturalHeight,
-    );
 
     scale = Math.min(targetWidth / boxWidthPx, targetHeight / boxHeightPx);
     scale = Math.max(scale, fitScale);
@@ -826,10 +1004,14 @@ function updateModalLayout() {
     offsetY = (containerHeight - naturalHeight * scale) / 2;
   }
 
+  state.modalImageView.baseScale = scale;
+  state.modalImageView.fitScale = fitScale;
+  state.modalImageView.baseTranslateX = offsetX;
+  state.modalImageView.baseTranslateY = offsetY;
+  state.modalImageView.minScale = Math.min(1, fitScale / scale);
   modalZoomWrapper.style.width = `${naturalWidth}px`;
   modalZoomWrapper.style.height = `${naturalHeight}px`;
-  modalZoomWrapper.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
-  applyBoundingBoxStrokeScale(scale);
+  applyModalTransform();
   updateBoundingBoxOverlay(activeMedia.boundingBox);
 }
 
@@ -849,6 +1031,11 @@ function renderModal() {
 
   const activeMedia = getAlertMedia(alert, state.modalView);
   state.modalView = activeMedia?.view || null;
+  const sourceKey = activeMedia?.url || null;
+  if (state.modalImageView.sourceKey !== sourceKey) {
+    state.modalImageView.sourceKey = sourceKey;
+    resetModalImageView();
+  }
   modalOverlay.hidden = false;
   modalOverlay.setAttribute("aria-hidden", "false");
   document.body.classList.add("modalOpen");
@@ -864,6 +1051,7 @@ function renderModal() {
 
   modalEmpty.hidden = true;
   modalZoomWrapper.hidden = false;
+  modalBoundingBox.hidden = true;
   modalImage.alt = `${alert.typeLabel} alert`;
 
   if (modalImage.dataset.activeSrc !== activeMedia.url) {
@@ -891,9 +1079,44 @@ function openModal(alertId) {
 function closeModal() {
   state.modalAlertId = null;
   state.modalView = null;
+  state.modalImageView.sourceKey = null;
+  resetModalImageView();
   modalOverlay.hidden = true;
   modalOverlay.setAttribute("aria-hidden", "true");
   document.body.classList.remove("modalOpen");
+}
+
+function zoomModalImage(clientX, clientY, nextScale) {
+  if (modalZoomWrapper.hidden || !modalImage.complete || !modalImage.naturalWidth) {
+    return;
+  }
+
+  const rect = modalImageContainer.getBoundingClientRect();
+  const px = clientX - rect.left;
+  const py = clientY - rect.top;
+  const { baseScale, baseTranslateX, baseTranslateY, scale, minScale, maxScale } =
+    state.modalImageView;
+  const clampedScale = Math.min(maxScale, Math.max(minScale, nextScale));
+  if (clampedScale === scale) {
+    return;
+  }
+
+  const totalScale = baseScale * scale;
+  const totalTranslateX = baseTranslateX + state.modalImageView.translateX;
+  const totalTranslateY = baseTranslateY + state.modalImageView.translateY;
+  const imageX = (px - totalTranslateX) / totalScale;
+  const imageY = (py - totalTranslateY) / totalScale;
+  const nextTotalScale = baseScale * clampedScale;
+
+  state.modalImageView.scale = clampedScale;
+  state.modalImageView.translateX = px - imageX * nextTotalScale - baseTranslateX;
+  state.modalImageView.translateY = py - imageY * nextTotalScale - baseTranslateY;
+  applyModalTransform();
+}
+
+function resetModalZoom() {
+  resetModalImageView();
+  applyModalTransform();
 }
 
 function zoomMap(clientX, clientY, nextScale) {
@@ -932,9 +1155,36 @@ function renderAll() {
 }
 
 async function bootstrap() {
-  const response = await fetch("/api/state");
-  state.snapshot = await response.json();
+  const [stateResponse, configResponse] = await Promise.all([
+    fetch("/api/state"),
+    fetch("/api/config/upstream-websocket"),
+  ]);
+  state.snapshot = await stateResponse.json();
+  const configPayload = await configResponse.json();
+  state.upstreamUrl =
+    typeof configPayload?.url === "string" ? configPayload.url : "";
+  updateUpstreamUrlInput();
   renderAll();
+}
+
+function updateFiltersFromInputs() {
+  const checkedInputs = filterPanel.querySelectorAll("input[type='checkbox']:checked");
+  state.filters.bearing = new Set();
+  state.filters.type = new Set();
+
+  checkedInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    if (input.name === "bearing") {
+      state.filters.bearing.add(input.value);
+    }
+
+    if (input.name === "type") {
+      state.filters.type.add(input.value);
+    }
+  });
 }
 
 function connectSocket() {
@@ -961,6 +1211,18 @@ alertsList.addEventListener("click", (event) => {
 
 clearAlertsButton.addEventListener("click", clearAlerts);
 pushDemoAlertButton.addEventListener("click", pushDemoAlert);
+applyUpstreamUrlButton.addEventListener("click", applyUpstreamUrl);
+filterPanel.addEventListener("change", () => {
+  updateFiltersFromInputs();
+  renderAll();
+});
+upstreamUrlInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") {
+    return;
+  }
+  event.preventDefault();
+  void applyUpstreamUrl();
+});
 
 alertsList.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") {
@@ -990,6 +1252,7 @@ mapRoot.addEventListener("pointerdown", (event) => {
   }
 
   state.mapView.pointerId = event.pointerId;
+  state.mapView.pointerAlertId = getAlertIdFromTarget(event.target);
   state.mapView.panStartX = event.clientX;
   state.mapView.panStartY = event.clientY;
   state.mapView.originTranslateX = state.mapView.translateX;
@@ -1031,7 +1294,18 @@ function stopMapPan(event) {
   mapRoot.classList.remove("isPanning");
 }
 
-mapRoot.addEventListener("pointerup", stopMapPan);
+mapRoot.addEventListener("pointerup", (event) => {
+  const shouldOpenModal =
+    !state.mapView.dragMoved && Boolean(state.mapView.pointerAlertId);
+  const alertId = state.mapView.pointerAlertId;
+  stopMapPan(event);
+  state.mapView.dragMoved = false;
+  state.mapView.pointerAlertId = null;
+
+  if (shouldOpenModal && alertId) {
+    openModal(alertId);
+  }
+});
 mapRoot.addEventListener("pointercancel", stopMapPan);
 
 mapRoot.addEventListener("dblclick", () => {
@@ -1053,6 +1327,75 @@ modalViewToggle.addEventListener("click", (event) => {
   }
   state.modalView = button.dataset.view;
   renderModal();
+});
+
+modalImageContainer.addEventListener(
+  "wheel",
+  (event) => {
+    if (modalOverlay.hidden) {
+      return;
+    }
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+    zoomModalImage(event.clientX, event.clientY, state.modalImageView.scale * delta);
+  },
+  { passive: false },
+);
+
+modalImageContainer.addEventListener("pointerdown", (event) => {
+  if (modalOverlay.hidden || event.button !== 0) {
+    return;
+  }
+
+  event.preventDefault();
+  state.modalImageView.pointerId = event.pointerId;
+  state.modalImageView.panStartX = event.clientX;
+  state.modalImageView.panStartY = event.clientY;
+  state.modalImageView.originTranslateX = state.modalImageView.translateX;
+  state.modalImageView.originTranslateY = state.modalImageView.translateY;
+  state.modalImageView.dragMoved = false;
+  modalImageContainer.classList.add("isPanning");
+  modalImageContainer.setPointerCapture(event.pointerId);
+});
+
+modalImageContainer.addEventListener("pointermove", (event) => {
+  if (state.modalImageView.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const dx = event.clientX - state.modalImageView.panStartX;
+  const dy = event.clientY - state.modalImageView.panStartY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+    state.modalImageView.dragMoved = true;
+  }
+
+  if (!state.modalImageView.dragMoved) {
+    return;
+  }
+
+  state.modalImageView.translateX = state.modalImageView.originTranslateX + dx;
+  state.modalImageView.translateY = state.modalImageView.originTranslateY + dy;
+  applyModalTransform();
+});
+
+function stopModalPan(event) {
+  if (state.modalImageView.pointerId !== event.pointerId) {
+    return;
+  }
+
+  if (modalImageContainer.hasPointerCapture(event.pointerId)) {
+    modalImageContainer.releasePointerCapture(event.pointerId);
+  }
+  state.modalImageView.pointerId = null;
+  modalImageContainer.classList.remove("isPanning");
+}
+
+modalImageContainer.addEventListener("pointerup", stopModalPan);
+modalImageContainer.addEventListener("pointercancel", stopModalPan);
+
+modalImageContainer.addEventListener("dblclick", (event) => {
+  event.preventDefault();
+  resetModalZoom();
 });
 
 modalImage.addEventListener("load", updateModalLayout);
