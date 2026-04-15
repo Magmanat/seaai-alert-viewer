@@ -1,25 +1,112 @@
 # SEAAI Live Monitor
 
-Standalone monolithic Python web app that:
+Standalone Python web app for viewing live SEAAI detections in a browser.
 
-- connects directly to a configured SEAAI WebSocket
-- keeps all state in memory only
-- renders a live tracking map for the past 60 seconds of detections
-- renders an alert panel with the latest 50 detections in FIFO order
+## Features
 
-## Configuration
+- connects to an upstream SEAAI websocket feed
+- keeps all working state in memory only
+- renders a live tracking map for recent detections
+- renders an alerts panel with thumbnails, metadata, and image modal viewing
+- supports runtime websocket URL changes from the UI
+- supports alert filtering by bearing and classification
+- supports clear-all alerts and a demo alert injector
+- plays an alert sound for new alerts that match the active filters
+- supports thermal snapshots using `T2`
 
-Set these environment variables before running:
+## UI Overview
+
+### Alerts Panel
+
+- `Push demo alert` injects a hard-coded example detection path
+- `Clear alerts` removes all alerts from the panel
+- websocket URL input lets you change the upstream feed without restarting
+- `Connect` applies the websocket URL and triggers an immediate reconnect attempt
+- bearing and classification checkboxes filter both the alert list and tracking map
+- if no boxes are checked in a filter group, that group allows all values
+
+### Tracking Map
+
+- mouse wheel zoom
+- click-drag pan
+- double-click reset
+- map markers open the image modal
+- marker and trail visuals stay visually consistent while zooming
+
+### Image Modal
+
+- opens from either the alert card or the tracking-map marker
+- initially frames the bounding box if one exists
+- mouse wheel zoom
+- click-drag pan
+- double-click reset
+- can zoom all the way back out to the full image
+
+## Installation
 
 ```bash
-export SEAAI_WS_URL="ws://your-seaai-source:8081"
-export APP_HOST="127.0.0.1"
-export APP_PORT="8765"
+python3 -m pip install -r requirements.txt
 ```
 
-Optional:
+## Run
+
+Basic run:
 
 ```bash
+python3 main.py
+```
+
+Then open `http://127.0.0.1:8765`.
+
+Default upstream websocket URL if nothing is configured:
+
+```text
+ws://localhost:8080/test
+```
+
+## Command-Line Flags
+
+CLI flags override environment variables.
+
+```bash
+python3 main.py --help
+```
+
+Available flags:
+
+```text
+--app-title <text>
+--host <host>
+--port <port>
+--seaai-ws-url <ws-url>
+--max-panel-alerts <count>
+--track-window-seconds <seconds>
+--map-max-distance-m <meters>
+--dedupe-window-seconds <seconds>
+--reconnect-delay-seconds <seconds>
+```
+
+Example:
+
+```bash
+python3 main.py \
+  --host 0.0.0.0 \
+  --port 8765 \
+  --seaai-ws-url ws://172.26.0.107:9002/v1/alerts \
+  --max-panel-alerts 100 \
+  --track-window-seconds 90 \
+  --map-max-distance-m 1500
+```
+
+## Environment Variables
+
+Environment variables are still supported:
+
+```bash
+export APP_TITLE="SEAAI Live Monitor"
+export APP_HOST="127.0.0.1"
+export APP_PORT="8765"
+export SEAAI_WS_URL="ws://172.26.0.107:9002/v1/alerts"
 export MAX_PANEL_ALERTS="50"
 export TRACK_WINDOW_SECONDS="60"
 export MAP_MAX_DISTANCE_M="1000"
@@ -27,16 +114,15 @@ export DEDUPE_WINDOW_SECONDS="15"
 export RECONNECT_DELAY_SECONDS="5"
 ```
 
-## Run
+Precedence:
 
-```bash
-python3 -m pip install -r requirements.txt
-python3 main.py
+```text
+CLI flags > environment variables > built-in defaults
 ```
 
-Then open `http://127.0.0.1:8765`.
-
 ## Testing Without Hardware
+
+### Push a Mock Alert via HTTP
 
 You can post a SEAAI-shaped payload directly into the app:
 
@@ -58,3 +144,18 @@ curl -X POST http://127.0.0.1:8765/api/mock-alert \
     ]
   }'
 ```
+
+### Grab a Single Frame from Thermal RTSP
+
+Example using `T2`:
+
+```bash
+ffmpeg -y -rtsp_transport tcp -i "rtsp://172.26.0.99:8555/T2" -frames:v 1 -update 1 -q:v 2 frame.jpg
+```
+
+## Notes
+
+- supported bearings: `APPROACHING`, `DEPARTING`, `LATERAL_CROSSING`, `UNKNOWN`
+- supported thermal snapshot key: `T2`
+- unsupported detections are ignored during parsing
+- `HAZARD` classifications are currently mapped to vessel display behavior

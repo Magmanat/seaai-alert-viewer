@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import argparse
 import os
+import sys
 from dataclasses import dataclass
 
 
@@ -32,4 +34,66 @@ class Settings:
     reconnect_delay_seconds: int = _env_int("RECONNECT_DELAY_SECONDS", 5)
 
 
-settings = Settings()
+def _build_parser(defaults: Settings) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Run the SEAAI live monitor server.",
+    )
+    parser.add_argument("--app-title", default=defaults.app_title, help="UI application title")
+    parser.add_argument("--host", default=defaults.host, help="Host address to bind")
+    parser.add_argument("--port", type=int, default=defaults.port, help="Port to bind")
+    parser.add_argument(
+        "--seaai-ws-url",
+        default=defaults.seaai_ws_url,
+        help="Upstream SEAAI websocket URL",
+    )
+    parser.add_argument(
+        "--max-panel-alerts",
+        type=int,
+        default=defaults.max_panel_alerts,
+        help="Maximum number of alerts kept in the panel",
+    )
+    parser.add_argument(
+        "--track-window-seconds",
+        type=int,
+        default=defaults.track_window_seconds,
+        help="Seconds of alert history kept for map tracks",
+    )
+    parser.add_argument(
+        "--map-max-distance-m",
+        type=int,
+        default=defaults.map_max_distance_m,
+        help="Maximum map radius in meters",
+    )
+    parser.add_argument(
+        "--dedupe-window-seconds",
+        type=int,
+        default=defaults.dedupe_window_seconds,
+        help="Seconds to suppress duplicate detections",
+    )
+    parser.add_argument(
+        "--reconnect-delay-seconds",
+        type=int,
+        default=defaults.reconnect_delay_seconds,
+        help="Seconds between upstream websocket reconnect attempts",
+    )
+    return parser
+
+
+def load_settings(argv: list[str] | None = None) -> Settings:
+    defaults = Settings()
+    parser = _build_parser(defaults)
+    args, _ = parser.parse_known_args(sys.argv[1:] if argv is None else argv)
+    return Settings(
+        app_title=args.app_title,
+        host=args.host,
+        port=args.port,
+        seaai_ws_url=args.seaai_ws_url,
+        max_panel_alerts=args.max_panel_alerts,
+        track_window_seconds=args.track_window_seconds,
+        map_max_distance_m=args.map_max_distance_m,
+        dedupe_window_seconds=args.dedupe_window_seconds,
+        reconnect_delay_seconds=args.reconnect_delay_seconds,
+    )
+
+
+settings = load_settings()
