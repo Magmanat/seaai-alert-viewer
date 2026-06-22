@@ -146,12 +146,20 @@
               <label class="timeFilterField">
                 <span>Start</span>
                 <input id="alert-start-date" type="date" />
-                <input id="alert-start-time" type="time" step="1" />
+                <div class="timeSelectGroup">
+                  <select id="alert-start-hour" aria-label="Start hour"></select>
+                  <span>:</span>
+                  <select id="alert-start-minute" aria-label="Start minute"></select>
+                </div>
               </label>
               <label class="timeFilterField">
                 <span>End</span>
                 <input id="alert-end-date" type="date" />
-                <input id="alert-end-time" type="time" step="1" />
+                <div class="timeSelectGroup">
+                  <select id="alert-end-hour" aria-label="End hour"></select>
+                  <span>:</span>
+                  <select id="alert-end-minute" aria-label="End minute"></select>
+                </div>
               </label>
             </div>
           </div>

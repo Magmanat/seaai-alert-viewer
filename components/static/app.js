@@ -116,9 +116,11 @@ const newPasswordInput = document.getElementById("new-password");
 const usersList = document.getElementById("users-list");
 const logoutButton = document.getElementById("logout-button");
 const alertStartDateInput = document.getElementById("alert-start-date");
-const alertStartTimeInput = document.getElementById("alert-start-time");
+const alertStartHourInput = document.getElementById("alert-start-hour");
+const alertStartMinuteInput = document.getElementById("alert-start-minute");
 const alertEndDateInput = document.getElementById("alert-end-date");
-const alertEndTimeInput = document.getElementById("alert-end-time");
+const alertEndHourInput = document.getElementById("alert-end-hour");
+const alertEndMinuteInput = document.getElementById("alert-end-minute");
 const applyAlertTimeFilterButton = document.getElementById("apply-alert-time-filter");
 const clearAlertTimeFilterButton = document.getElementById("clear-alert-time-filter");
 
@@ -539,14 +541,38 @@ function getFilteredAlerts() {
   return alerts.filter(matchesActiveFilters);
 }
 
-function parseLocalDateTimeInputs(dateInput, timeInput, fallbackTime) {
+function parseLocalDateTimeInputs(dateInput, hourInput, minuteInput, fallbackTime) {
   const dateValue = dateInput?.value;
   if (!dateValue) {
     return null;
   }
-  const timeValue = timeInput?.value || fallbackTime;
+  const timeValue =
+    hourInput?.value && minuteInput?.value
+      ? `${hourInput.value}:${minuteInput.value}:00`
+      : fallbackTime;
   const date = new Date(`${dateValue}T${timeValue}`);
   return Number.isNaN(date.getTime()) ? null : date.getTime();
+}
+
+function populateTimeSelect(select, maxValue) {
+  if (!select || select.options.length) {
+    return;
+  }
+  for (let value = 0; value <= maxValue; value += 1) {
+    const option = document.createElement("option");
+    option.value = String(value).padStart(2, "0");
+    option.textContent = String(value).padStart(2, "0");
+    select.appendChild(option);
+  }
+}
+
+function initializeAlertTimeFilterControls() {
+  populateTimeSelect(alertStartHourInput, 23);
+  populateTimeSelect(alertEndHourInput, 23);
+  populateTimeSelect(alertStartMinuteInput, 59);
+  populateTimeSelect(alertEndMinuteInput, 59);
+  if (alertEndHourInput) alertEndHourInput.value = "23";
+  if (alertEndMinuteInput) alertEndMinuteInput.value = "59";
 }
 
 function buildAlertQueryParams(offset, limit) {
@@ -586,16 +612,27 @@ async function reloadAlertPage() {
 }
 
 async function applyAlertTimeFilter() {
+  if (!alertStartDateInput?.value || !alertEndDateInput?.value) {
+    window.alert("Please enter both start and end dates before applying the time filter.");
+    return;
+  }
+
   const startMs = parseLocalDateTimeInputs(
     alertStartDateInput,
-    alertStartTimeInput,
+    alertStartHourInput,
+    alertStartMinuteInput,
     "00:00:00",
   );
   const endMs = parseLocalDateTimeInputs(
     alertEndDateInput,
-    alertEndTimeInput,
+    alertEndHourInput,
+    alertEndMinuteInput,
     "23:59:59",
   );
+  if (startMs === null || endMs === null) {
+    window.alert("Please enter a valid start and end date/time.");
+    return;
+  }
   if (startMs !== null && endMs !== null && startMs > endMs) {
     window.alert("Start time must be before end time");
     return;
@@ -611,9 +648,11 @@ async function clearAlertTimeFilter() {
   state.alertTimeFilterEndMs = null;
   state.alertTimeFilterActive = false;
   if (alertStartDateInput) alertStartDateInput.value = "";
-  if (alertStartTimeInput) alertStartTimeInput.value = "";
+  if (alertStartHourInput) alertStartHourInput.value = "00";
+  if (alertStartMinuteInput) alertStartMinuteInput.value = "00";
   if (alertEndDateInput) alertEndDateInput.value = "";
-  if (alertEndTimeInput) alertEndTimeInput.value = "";
+  if (alertEndHourInput) alertEndHourInput.value = "23";
+  if (alertEndMinuteInput) alertEndMinuteInput.value = "59";
   await reloadAlertPage();
 }
 
@@ -2027,6 +2066,7 @@ function applyIncomingSnapshot(nextSnapshot) {
 }
 
 async function bootstrap() {
+  initializeAlertTimeFilterControls();
   await loadSession();
   await loadTimelineDates();
   const [stateResponse, configResponse] = await Promise.all([
@@ -2155,7 +2195,14 @@ applyAlertTimeFilterButton?.addEventListener("click", () => {
 clearAlertTimeFilterButton?.addEventListener("click", () => {
   void clearAlertTimeFilter();
 });
-[alertStartDateInput, alertStartTimeInput, alertEndDateInput, alertEndTimeInput].forEach((input) => {
+[
+  alertStartDateInput,
+  alertStartHourInput,
+  alertStartMinuteInput,
+  alertEndDateInput,
+  alertEndHourInput,
+  alertEndMinuteInput,
+].forEach((input) => {
   input?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();

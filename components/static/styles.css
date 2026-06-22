@@ -353,7 +353,7 @@ body.modalOpen {
 
 .timeFilterField {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 96px;
+  grid-template-columns: 44px minmax(0, 126px) 96px;
   align-items: center;
   gap: 6px;
   color: var(--text-muted);
@@ -362,7 +362,8 @@ body.modalOpen {
   letter-spacing: 0.04em;
 }
 
-.timeFilterField input {
+.timeFilterField input,
+.timeFilterField select {
   width: 100%;
   min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -373,7 +374,20 @@ body.modalOpen {
   font-size: 11px;
 }
 
-.timeFilterField input[type="time"] {
+.timeSelectGroup {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 4px;
+}
+
+.timeSelectGroup span {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.timeFilterField select {
+  appearance: auto;
   font-variant-numeric: tabular-nums;
 }
 

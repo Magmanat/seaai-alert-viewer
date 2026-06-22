@@ -46,7 +46,7 @@ def _jwt_secret() -> str:
 @dataclass(frozen=True, slots=True)
 class Settings:
     app_title: str = _env_str("APP_TITLE", "SEAAI Full Viewer")
-    host: str = _env_str("APP_HOST", "127.0.0.1")
+    host: str = _env_str("APP_HOST", "0.0.0.0")
     port: int = _env_int("APP_PORT", 8766)
     seaai_ws_url: str = _env_str("SEAAI_WS_URL", "ws://localhost:8080/test")
     admin_password: str = _env_str("ADMIN_PASSWORD", "admin")
