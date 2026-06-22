@@ -384,8 +384,8 @@ async function loadUsers() {
     .map(
       (user) => `
         <div class="userRow" data-user-id="${escapeHtml(user.id)}">
-          <span>${escapeHtml(user.username)} <span class="userRole">${escapeHtml(user.role)}</span></span>
-          ${user.role === "admin" ? "" : '<button class="headerActionButton deleteUserButton" type="button">Delete</button>'}
+          <span>${escapeHtml(user.username)}</span>
+          <button class="headerActionButton deleteUserButton" type="button">Delete</button>
         </div>
       `,
     )

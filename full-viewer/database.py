@@ -92,7 +92,12 @@ class Database:
     def list_users(self) -> list[dict[str, Any]]:
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT id, username, role, created_at_ms FROM users ORDER BY username"
+                """
+                SELECT id, username, role, created_at_ms
+                FROM users
+                WHERE role = 'user'
+                ORDER BY username
+                """
             ).fetchall()
         return [dict(row) for row in rows]
 

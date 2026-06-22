@@ -34,6 +34,9 @@ Then open `http://127.0.0.1:8766` and sign in. The initial admin login is
 `admin` / `admin` unless `ADMIN_PASSWORD` or `--admin-password` is set before the
 first startup.
 
+Passwords are stored as salted PBKDF2 hashes. Login checks a submitted password
+against the stored hash; there is no reversible password decryption path.
+
 The full viewer stores users/settings/alerts in SQLite and snapshot images on
 the filesystem under `full-viewer/data/`. Alerts and media older than 90 days are
 rotated out by default.
