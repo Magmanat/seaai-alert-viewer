@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -120,7 +121,10 @@ async def ui_socket(websocket: WebSocket) -> None:
     queue = await memory_state.register_subscriber()
     try:
         while True:
-            snapshot = await queue.get()
+            try:
+                snapshot = await asyncio.wait_for(queue.get(), timeout=30)
+            except asyncio.TimeoutError:
+                snapshot = await memory_state.build_snapshot()
             await websocket.send_json(snapshot)
     except WebSocketDisconnect:
         pass

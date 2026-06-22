@@ -20,6 +20,11 @@ const state = {
     canManageUsers: false,
   },
   isLoadingMoreAlerts: false,
+  uiSocket: null,
+  uiSocketReconnectTimer: null,
+  uiSocketWatchdogTimer: null,
+  uiSocketRetryMs: 1000,
+  uiSocketLastMessageAt: 0,
   filters: {
     bearing: new Set(),
     type: new Set(),
@@ -1211,14 +1216,16 @@ function renderModalAlertMap(alert) {
     label.textContent = `${distance}m`;
   });
 
-  appendSvgMarker(svg, {
-    x: geometry.originX,
-    y: geometry.originY,
-    iconUrl: "/static/assets/camera-icon.svg",
-    fill: "#5b7fe1",
-    label: "",
-    subLabel: "",
-  });
+  const camera = document.createElement("div");
+  camera.className = "cameraMarker";
+  camera.style.left = `${geometry.originX}px`;
+  camera.style.top = `${geometry.originY}px`;
+  camera.innerHTML = `
+    <div class="cameraIconWrapper">
+      <img class="cameraIcon" src="/static/assets/camera-icon.svg" alt="Camera" />
+    </div>
+  `;
+  overlay.appendChild(camera);
 
   const points = (track.positions || []).map((position) =>
     polarToPoint(position.distance, position.angle, geometry, maxDistanceM),
@@ -1241,91 +1248,29 @@ function renderModalAlertMap(alert) {
   });
   const current = points[points.length - 1];
   if (current) {
-    appendSvgMarker(svg, {
-      x: current.x,
-      y: current.y,
-      iconUrl: `/static/assets/${track.type}.svg`,
-      fill: "#dc2626",
-      label: `#${track.trackId}`,
-      subLabel: `${Math.round(track.positions[track.positions.length - 1].distance)}m`,
-      bearing: track.bearing,
-    });
+    const bearingClass = track.bearing.toLowerCase().replaceAll(" ", "-");
+    const marker = document.createElement("div");
+    marker.className = "trackedObjectMarker modalTrackedObjectMarker";
+    marker.style.left = `${current.x}px`;
+    marker.style.top = `${current.y}px`;
+    marker.title = `${track.typeLabel} #${track.trackId} | ${track.bearing} | ${track.confidence}%`;
+    marker.innerHTML = `
+      <div class="trackedObjectContent">
+        <div class="trackedObjectId">#${escapeHtml(track.trackId)}</div>
+        <div class="trackedObjectVisual bearing-${escapeHtml(bearingClass)}">
+          <div class="trackedObjectBubble">
+            <div class="markerIconInLabel">
+              <img src="/static/assets/${escapeHtml(track.type)}.svg" class="trackedObjectIcon" alt="${escapeHtml(track.typeLabel)}" />
+            </div>
+            <span class="trackedObjectDistance">${Math.round(track.positions[track.positions.length - 1].distance)}m</span>
+          </div>
+          ${renderBearingArrowMarkup(track.bearing)}
+        </div>
+      </div>
+    `;
+    overlay.appendChild(marker);
   }
   applyModalMapTransform();
-}
-
-function appendSvgMarker(svg, options) {
-  const group = document.createElementNS(SVG_NS, "g");
-  group.setAttribute("transform", `translate(${options.x.toFixed(2)} ${options.y.toFixed(2)})`);
-  svg.appendChild(group);
-
-  if (options.label) {
-    const labelWidth = Math.max(72, String(options.label).length * 7 + 16);
-    const label = document.createElementNS(SVG_NS, "g");
-    label.setAttribute("transform", `translate(${-labelWidth / 2} -55)`);
-    const rect = document.createElementNS(SVG_NS, "rect");
-    rect.setAttribute("width", String(labelWidth));
-    rect.setAttribute("height", "18");
-    rect.setAttribute("rx", "9");
-    rect.setAttribute("fill", "rgba(10, 15, 24, 0.9)");
-    rect.setAttribute("stroke", "rgba(255, 255, 255, 0.18)");
-    const text = document.createElementNS(SVG_NS, "text");
-    text.setAttribute("x", String(labelWidth / 2));
-    text.setAttribute("y", "12");
-    text.setAttribute("text-anchor", "middle");
-    text.setAttribute("fill", "white");
-    text.setAttribute("font-size", "11");
-    text.setAttribute("font-weight", "700");
-    text.textContent = options.label;
-    label.append(rect, text);
-    group.appendChild(label);
-  }
-
-  if (options.bearing === "Lateral Crossing") {
-    for (const direction of [-1, 1]) {
-      const line = document.createElementNS(SVG_NS, "line");
-      line.setAttribute("x1", String(direction * 24));
-      line.setAttribute("y1", "0");
-      line.setAttribute("x2", String(direction * 38));
-      line.setAttribute("y2", "0");
-      line.setAttribute("stroke", "white");
-      line.setAttribute("stroke-width", "2");
-      const arrow = document.createElementNS(SVG_NS, "polygon");
-      arrow.setAttribute(
-        "points",
-        direction < 0 ? "-42,0 -32,-6 -32,6" : "42,0 32,-6 32,6",
-      );
-      arrow.setAttribute("fill", "white");
-      group.append(line, arrow);
-    }
-  }
-
-  const circle = document.createElementNS(SVG_NS, "circle");
-  circle.setAttribute("r", "22");
-  circle.setAttribute("fill", options.fill);
-  circle.setAttribute("stroke", "white");
-  circle.setAttribute("stroke-width", "2");
-  group.appendChild(circle);
-
-  const image = document.createElementNS(SVG_NS, "image");
-  image.setAttribute("href", options.iconUrl);
-  image.setAttribute("x", "-9");
-  image.setAttribute("y", options.subLabel ? "-15" : "-9");
-  image.setAttribute("width", "18");
-  image.setAttribute("height", "18");
-  group.appendChild(image);
-
-  if (options.subLabel) {
-    const subLabel = document.createElementNS(SVG_NS, "text");
-    subLabel.setAttribute("x", "0");
-    subLabel.setAttribute("y", "12");
-    subLabel.setAttribute("text-anchor", "middle");
-    subLabel.setAttribute("fill", "white");
-    subLabel.setAttribute("font-size", "10");
-    subLabel.setAttribute("font-weight", "700");
-    subLabel.textContent = options.subLabel;
-    group.appendChild(subLabel);
-  }
 }
 
 function clampModalMapTranslation(scale, translateX, translateY) {
@@ -1716,17 +1661,77 @@ function updateFiltersFromInputs() {
 }
 
 function connectSocket() {
+  if (
+    state.uiSocket &&
+    [WebSocket.CONNECTING, WebSocket.OPEN].includes(state.uiSocket.readyState)
+  ) {
+    return;
+  }
+
+  if (state.uiSocketReconnectTimer) {
+    window.clearTimeout(state.uiSocketReconnectTimer);
+    state.uiSocketReconnectTimer = null;
+  }
+
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
   const socket = new WebSocket(`${scheme}://${window.location.host}/ws/ui`);
+  state.uiSocket = socket;
+
+  socket.addEventListener("open", () => {
+    state.uiSocketRetryMs = 1000;
+    state.uiSocketLastMessageAt = Date.now();
+    startSocketWatchdog();
+  });
 
   socket.addEventListener("message", (event) => {
+    state.uiSocketLastMessageAt = Date.now();
     state.snapshot = JSON.parse(event.data);
     renderAll();
   });
 
-  socket.addEventListener("close", () => {
-    window.setTimeout(connectSocket, 1500);
+  socket.addEventListener("error", () => {
+    socket.close();
   });
+
+  socket.addEventListener("close", () => {
+    if (state.uiSocket === socket) {
+      state.uiSocket = null;
+    }
+    stopSocketWatchdog();
+    scheduleSocketReconnect();
+  });
+}
+
+function scheduleSocketReconnect() {
+  if (state.uiSocketReconnectTimer) {
+    return;
+  }
+  const delay = state.uiSocketRetryMs;
+  state.uiSocketRetryMs = Math.min(state.uiSocketRetryMs * 1.6, 15000);
+  state.uiSocketReconnectTimer = window.setTimeout(() => {
+    state.uiSocketReconnectTimer = null;
+    connectSocket();
+  }, delay);
+}
+
+function startSocketWatchdog() {
+  stopSocketWatchdog();
+  state.uiSocketWatchdogTimer = window.setInterval(() => {
+    const socket = state.uiSocket;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    if (Date.now() - state.uiSocketLastMessageAt > 75000) {
+      socket.close();
+    }
+  }, 15000);
+}
+
+function stopSocketWatchdog() {
+  if (state.uiSocketWatchdogTimer) {
+    window.clearInterval(state.uiSocketWatchdogTimer);
+    state.uiSocketWatchdogTimer = null;
+  }
 }
 
 alertsList.addEventListener("click", (event) => {

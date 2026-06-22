@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import sys
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -232,15 +233,24 @@ async def get_snapshot(group_id: str, kind: str, _: dict[str, Any] = Depends(cur
 @app.websocket("/ws/ui")
 async def ui_socket(websocket: WebSocket) -> None:
     token = websocket.cookies.get(AUTH_COOKIE, "")
-    if decode_token(token, settings.jwt_secret) is None:
+    payload = decode_token(token, settings.jwt_secret)
+    if payload is None:
         await websocket.close(code=1008)
         return
+    user = database.get_user_by_id(int(payload.get("sub", 0)))
+    if user is None:
+        await websocket.close(code=1008)
+        return
+    public_user = dict(user)
     await websocket.accept()
     queue = await persistent_state.register_subscriber()
     try:
         while True:
-            snapshot = await queue.get()
-            await websocket.send_json(snapshot)
+            try:
+                snapshot = await asyncio.wait_for(queue.get(), timeout=30)
+            except asyncio.TimeoutError:
+                snapshot = await persistent_state.build_snapshot()
+            await websocket.send_json(_with_viewer_permissions(snapshot, public_user))
     except WebSocketDisconnect:
         pass
     finally:
