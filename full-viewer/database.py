@@ -202,7 +202,7 @@ class Database:
         with self.connect() as connection:
             rows = connection.execute(
                 """
-                SELECT DISTINCT date(timestamp_ms / 1000, 'unixepoch') AS alert_date
+                SELECT DISTINCT date(timestamp_ms / 1000, 'unixepoch', 'localtime') AS alert_date
                 FROM alerts
                 ORDER BY alert_date DESC
                 """

@@ -5,7 +5,7 @@ import sqlite3
 import sys
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime, time as datetime_time, timezone
+from datetime import datetime, time as datetime_time
 from pathlib import Path
 from typing import Any
 
@@ -199,9 +199,7 @@ async def timeline(
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
             clamped_minute = max(0, min(minute if minute is not None else 0, 1439))
-            start_of_day = datetime.combine(
-                selected_date, datetime_time.min, tzinfo=timezone.utc
-            )
+            start_of_day = datetime.combine(selected_date, datetime_time.min)
             end_ms = int(start_of_day.timestamp() * 1000) + clamped_minute * 60 * 1000
     start_ms = end_ms - clamped_window_seconds * 1000
     return await persistent_state.timeline_tracks(start_ms, end_ms)
