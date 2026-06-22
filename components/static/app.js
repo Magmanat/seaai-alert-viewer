@@ -1139,9 +1139,8 @@ function renderModalAlertMap(alert) {
   if (!alert) {
     return;
   }
-  const track = (state.snapshot?.tracks || []).find(
-    (item) => item.id === alert.id || item.trackId === alert.trackId,
-  ) || {
+  const liveTrack = (state.snapshot?.tracks || []).find((item) => item.id === alert.id);
+  const track = liveTrack || {
     id: alert.id,
     trackId: alert.trackId,
     type: alert.type,
@@ -1164,11 +1163,17 @@ function renderModalAlertMap(alert) {
 
   const stage = document.createElement("div");
   stage.className = "modalMapStage";
+  stage.style.width = `${width}px`;
+  stage.style.height = `${height}px`;
   const overlay = document.createElement("div");
   overlay.className = "modalMapOverlay";
+  overlay.style.width = `${width}px`;
+  overlay.style.height = `${height}px`;
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(height));
   svg.classList.add("mapSvg");
   stage.appendChild(svg);
   stage.appendChild(overlay);
