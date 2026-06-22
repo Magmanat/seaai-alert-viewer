@@ -46,8 +46,8 @@ can see or change the upstream websocket URL.
 
 The full-viewer map supports 1, 2, 5, and 10 minute windows. Users can select a
 stored local-system date, scrub through that day with the bottom timeline, and return to
-the current stream with `Live`. The timeline uses second-level local system time
-and clamps today to the current time.
+the current stream with `Live`. The timeline uses second-level local system time,
+shows the full day, and prevents today's selection from going beyond current time.
 
 ## Mock Websocket Feed
 

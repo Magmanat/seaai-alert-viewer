@@ -32,6 +32,7 @@ const state = {
   timelineTracks: null,
   timelineLoading: false,
   timelineRequestId: 0,
+  timelineDragging: false,
   filters: {
     bearing: new Set(),
     type: new Set(),
@@ -542,7 +543,7 @@ function updateTimelineControls() {
   } else {
     state.timelineSecond = Math.min(state.timelineSecond, maxTimelineSecond);
   }
-  timelineSlider.max = String(maxTimelineSecond);
+  timelineSlider.max = "86399";
   timelineSlider.value = String(state.timelineSecond);
   timelineCurrentLabel.textContent =
     state.timelineMode === "live"
@@ -2009,6 +2010,18 @@ timelineSlider?.addEventListener("input", () => {
     Number(timelineSlider.value) || 0,
   );
 });
+timelineSlider?.addEventListener("pointerdown", () => {
+  state.timelineDragging = true;
+});
+timelineSlider?.addEventListener("pointerup", () => {
+  state.timelineDragging = false;
+});
+timelineSlider?.addEventListener("pointercancel", () => {
+  state.timelineDragging = false;
+});
+timelineSlider?.addEventListener("change", () => {
+  state.timelineDragging = false;
+});
 timelineLiveButton?.addEventListener("click", enterLiveMode);
 if (createUserForm) {
   createUserForm.addEventListener("submit", createUser);
@@ -2301,7 +2314,7 @@ window.addEventListener("resize", () => {
 });
 
 function advanceHistoryTimeline() {
-  if (state.timelineMode !== "history") {
+  if (state.timelineMode !== "history" || state.timelineDragging) {
     return;
   }
   const maxTimelineSecond = getMaxTimelineSecond(state.timelineDate);
