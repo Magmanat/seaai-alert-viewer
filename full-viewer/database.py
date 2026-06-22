@@ -171,12 +171,34 @@ class Database:
             )
         return int(cursor.lastrowid)
 
-    def list_alerts(self, limit: int, offset: int = 0) -> tuple[list[sqlite3.Row], int]:
+    def list_alerts(
+        self,
+        limit: int,
+        offset: int = 0,
+        start_ms: int | None = None,
+        end_ms: int | None = None,
+    ) -> tuple[list[sqlite3.Row], int]:
+        conditions = []
+        params: list[Any] = []
+        if start_ms is not None:
+            conditions.append("timestamp_ms >= ?")
+            params.append(start_ms)
+        if end_ms is not None:
+            conditions.append("timestamp_ms <= ?")
+            params.append(end_ms)
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         with self.connect() as connection:
-            total = connection.execute("SELECT COUNT(*) AS count FROM alerts").fetchone()["count"]
+            total = connection.execute(
+                f"SELECT COUNT(*) AS count FROM alerts {where_clause}", params
+            ).fetchone()["count"]
             rows = connection.execute(
-                "SELECT * FROM alerts ORDER BY timestamp_ms DESC, id DESC LIMIT ? OFFSET ?",
-                (limit, offset),
+                f"""
+                SELECT * FROM alerts
+                {where_clause}
+                ORDER BY timestamp_ms DESC, id DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
             ).fetchall()
         return rows, int(total)
 

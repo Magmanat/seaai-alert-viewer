@@ -329,6 +329,34 @@ body.modalOpen {
   gap: 8px;
 }
 
+.alertTimeFilter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.timeFilterField {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.timeFilterField input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  padding: 6px 7px;
+  font-size: 11px;
+}
+
 .filterGroup {
   display: flex;
   flex-wrap: wrap;

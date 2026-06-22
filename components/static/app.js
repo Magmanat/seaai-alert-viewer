@@ -33,6 +33,9 @@ const state = {
   timelineLoading: false,
   timelineRequestId: 0,
   timelineDragging: false,
+  alertTimeFilterStartMs: null,
+  alertTimeFilterEndMs: null,
+  alertTimeFilterActive: false,
   filters: {
     bearing: new Set(),
     type: new Set(),
@@ -112,6 +115,10 @@ const newUsernameInput = document.getElementById("new-username");
 const newPasswordInput = document.getElementById("new-password");
 const usersList = document.getElementById("users-list");
 const logoutButton = document.getElementById("logout-button");
+const alertStartTimeInput = document.getElementById("alert-start-time");
+const alertEndTimeInput = document.getElementById("alert-end-time");
+const applyAlertTimeFilterButton = document.getElementById("apply-alert-time-filter");
+const clearAlertTimeFilterButton = document.getElementById("clear-alert-time-filter");
 
 const modalOverlay = document.getElementById("alert-modal");
 const modalClose = document.getElementById("modal-close");
@@ -528,6 +535,73 @@ function matchesActiveFilters(item) {
 function getFilteredAlerts() {
   const alerts = state.snapshot?.alerts || [];
   return alerts.filter(matchesActiveFilters);
+}
+
+function parseLocalDateTimeInput(input) {
+  const value = input?.value;
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+}
+
+function buildAlertQueryParams(offset, limit) {
+  const params = new URLSearchParams({
+    offset: String(offset),
+    limit: String(limit),
+  });
+  if (state.alertTimeFilterStartMs !== null) {
+    params.set("start_ms", String(state.alertTimeFilterStartMs));
+  }
+  if (state.alertTimeFilterEndMs !== null) {
+    params.set("end_ms", String(state.alertTimeFilterEndMs));
+  }
+  return params;
+}
+
+async function reloadAlertPage() {
+  if (state.session.mode !== "full") {
+    renderAlerts();
+    return;
+  }
+  const limit = state.snapshot?.alertsLimit || 30;
+  const response = await fetch(`/api/alerts?${buildAlertQueryParams(0, limit).toString()}`);
+  if (!response.ok) {
+    window.alert("Failed to load filtered alerts");
+    return;
+  }
+  const payload = await response.json();
+  state.snapshot.alerts = payload.alerts || [];
+  state.snapshot.alertsTotal = payload.total;
+  state.snapshot.alertsOffset = 0;
+  state.snapshot.alertsLimit = payload.limit || limit;
+  state.snapshot.hasMoreAlerts = Boolean(payload.hasMore);
+  state.lastAlertsSignature = "";
+  alertsList.scrollTop = 0;
+  renderAlerts();
+}
+
+async function applyAlertTimeFilter() {
+  const startMs = parseLocalDateTimeInput(alertStartTimeInput);
+  const endMs = parseLocalDateTimeInput(alertEndTimeInput);
+  if (startMs !== null && endMs !== null && startMs > endMs) {
+    window.alert("Start time must be before end time");
+    return;
+  }
+  state.alertTimeFilterStartMs = startMs;
+  state.alertTimeFilterEndMs = endMs;
+  state.alertTimeFilterActive = startMs !== null || endMs !== null;
+  await reloadAlertPage();
+}
+
+async function clearAlertTimeFilter() {
+  state.alertTimeFilterStartMs = null;
+  state.alertTimeFilterEndMs = null;
+  state.alertTimeFilterActive = false;
+  if (alertStartTimeInput) alertStartTimeInput.value = "";
+  if (alertEndTimeInput) alertEndTimeInput.value = "";
+  await reloadAlertPage();
 }
 
 function getFilteredTracks() {
@@ -1059,10 +1133,10 @@ async function loadMoreAlerts() {
   if (!state.snapshot?.hasMoreAlerts) {
     return;
   }
-  state.isLoadingMoreAlerts = true;
+    state.isLoadingMoreAlerts = true;
   try {
     const response = await fetch(
-      `/api/alerts?offset=${currentAlerts.length}&limit=${state.snapshot.alertsLimit || 30}`,
+      `/api/alerts?${buildAlertQueryParams(currentAlerts.length, state.snapshot.alertsLimit || 30).toString()}`,
     );
     if (!response.ok) {
       return;
@@ -1924,7 +1998,7 @@ function applyIncomingSnapshot(nextSnapshot) {
     state.latestLiveSnapshot || state.snapshot,
   );
 
-  if (state.timelineMode === "live") {
+  if (state.timelineMode === "live" && !state.alertTimeFilterActive) {
     state.snapshot = state.latestLiveSnapshot;
     return;
   }
@@ -2062,6 +2136,20 @@ clearAlertsButton.addEventListener("click", clearAlerts);
 pushDemoAlertButton.addEventListener("click", pushDemoAlert);
 applyUpstreamUrlButton.addEventListener("click", applyUpstreamUrl);
 alertsList.addEventListener("scroll", maybeLoadMoreAlerts);
+applyAlertTimeFilterButton?.addEventListener("click", () => {
+  void applyAlertTimeFilter();
+});
+clearAlertTimeFilterButton?.addEventListener("click", () => {
+  void clearAlertTimeFilter();
+});
+[alertStartTimeInput, alertEndTimeInput].forEach((input) => {
+  input?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void applyAlertTimeFilter();
+    }
+  });
+});
 mapWindowButtons?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-window-seconds]");
   if (!button) {

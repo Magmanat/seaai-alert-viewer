@@ -120,9 +120,17 @@ class PersistentState:
             "tracks": [serialize_track(event) for event in tracks_by_id.values()],
         }
 
-    async def list_alerts(self, limit: int, offset: int) -> dict[str, Any]:
+    async def list_alerts(
+        self,
+        limit: int,
+        offset: int,
+        start_ms: int | None = None,
+        end_ms: int | None = None,
+    ) -> dict[str, Any]:
         async with self._lock:
-            rows, total = self.database.list_alerts(limit=limit, offset=offset)
+            rows, total = self.database.list_alerts(
+                limit=limit, offset=offset, start_ms=start_ms, end_ms=end_ms
+            )
         return {
             "alerts": [serialize_alert(row_to_event(row)) for row in rows],
             "total": total,

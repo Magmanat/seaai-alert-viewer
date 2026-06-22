@@ -43,6 +43,7 @@ Git.
 - Regular users can view alerts, images, tracks, and backend websocket status.
 - Regular users cannot see or change the upstream websocket URL.
 - Admin users can create/delete regular users and change the upstream websocket URL.
+- The alert list supports start/end local-time filtering while preserving lazy loading.
 - `Push demo alert` and `Clear alerts` are disabled in full-viewer mode.
 - Snapshot image blobs are stored on disk under `full-viewer/data/media/`.
 - `RETENTION_DAYS` controls automatic alert/media cleanup, defaulting to `90`.

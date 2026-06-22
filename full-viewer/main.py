@@ -170,10 +170,17 @@ async def get_state(_: dict[str, Any] = Depends(current_user)) -> dict[str, Any]
 async def list_alerts(
     offset: int = 0,
     limit: int | None = None,
+    start_ms: int | None = None,
+    end_ms: int | None = None,
     _: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     page_limit = max(1, min(limit or settings.alert_page_size, 100))
-    return await persistent_state.list_alerts(page_limit, max(0, offset))
+    return await persistent_state.list_alerts(
+        page_limit,
+        max(0, offset),
+        start_ms=start_ms,
+        end_ms=end_ms,
+    )
 
 
 @app.get("/api/timeline/dates")
