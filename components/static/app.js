@@ -1195,6 +1195,17 @@ function getAlertIdFromTarget(target) {
   return target.closest("[data-alert-id]")?.dataset.alertId || null;
 }
 
+function isInteractiveMapControl(target) {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        ".timelineControl, .mapHeaderMeta, button, input, select, textarea, label",
+      ),
+    )
+  );
+}
+
 function renderMap() {
   const snapshot = state.snapshot;
   const tracks = getFilteredTracks();
@@ -2119,6 +2130,9 @@ alertsList.addEventListener("keydown", (event) => {
 mapRoot.addEventListener(
   "wheel",
   (event) => {
+    if (isInteractiveMapControl(event.target)) {
+      return;
+    }
     event.preventDefault();
     const delta = event.deltaY < 0 ? 1.15 : 1 / 1.15;
     zoomMap(event.clientX, event.clientY, state.mapView.scale * delta);
@@ -2127,7 +2141,7 @@ mapRoot.addEventListener(
 );
 
 mapRoot.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0) {
+  if (event.button !== 0 || isInteractiveMapControl(event.target)) {
     return;
   }
 
