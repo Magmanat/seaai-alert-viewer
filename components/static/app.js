@@ -990,6 +990,7 @@ async function loadMoreAlerts() {
     const nextAlerts = (payload.alerts || []).filter(
       (alert) => !existingIds.has(alert.id),
     );
+    nextAlerts.forEach((alert) => state.knownAlertIds.add(alert.id));
     state.snapshot.alerts = [...currentAlerts, ...nextAlerts];
     state.snapshot.hasMoreAlerts = Boolean(payload.hasMore);
     state.snapshot.alertsTotal = payload.total;
