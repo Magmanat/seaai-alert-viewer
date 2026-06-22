@@ -2103,6 +2103,10 @@ function applyIncomingSnapshot(nextSnapshot) {
     viewer: nextSnapshot.viewer || state.snapshot?.viewer,
     status: nextSnapshot.status || state.snapshot?.status,
     map: nextSnapshot.map || state.snapshot?.map,
+    tracks:
+      state.timelineMode === "live"
+        ? nextSnapshot.tracks || state.snapshot?.tracks
+        : state.snapshot?.tracks,
     alertsTotal: state.alertTimeFilterActive
       ? state.snapshot?.alertsTotal
       : nextSnapshot.alertsTotal ?? state.snapshot?.alertsTotal,
