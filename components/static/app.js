@@ -740,6 +740,9 @@ function renderAlerts() {
   const allAlerts = state.snapshot?.alerts || [];
   syncAlertNotifications(allAlerts);
   const alerts = getFilteredAlerts();
+  const totalAlertCount = Number.isFinite(state.snapshot?.alertsTotal)
+    ? state.snapshot.alertsTotal
+    : alerts.length;
   const signature = alerts
     .map((alert) => {
       const bbox = Array.isArray(alert.boundingBox)
@@ -757,13 +760,13 @@ function renderAlerts() {
     .join("|");
 
   if (signature === state.lastAlertsSignature) {
-    alertCount.textContent = String(alerts.length);
+    alertCount.textContent = String(totalAlertCount);
     alertsEmpty.style.display = alerts.length ? "none" : "flex";
     return;
   }
 
   state.lastAlertsSignature = signature;
-  alertCount.textContent = String(alerts.length);
+  alertCount.textContent = String(totalAlertCount);
   alertsEmpty.style.display = alerts.length ? "none" : "flex";
 
   alertsList.innerHTML = alerts
