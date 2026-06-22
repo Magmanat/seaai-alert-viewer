@@ -140,7 +140,11 @@ class SeaAIWebSocketClient:
                 logger.info("Upstream websocket task cancelled")
                 raise
             except Exception as exc:
-                logger.exception("Upstream websocket error")
+                logger.warning(
+                    "Upstream websocket connection failed for %s: %s",
+                    self._ws_url,
+                    exc,
+                )
                 await self.state.set_connection_status(False, str(exc))
                 await self._wait_for_retry(reconnect_delay)
             else:
