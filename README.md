@@ -7,16 +7,18 @@ viewer for inspecting live SEAAI detections in a browser. It intentionally keeps
 state in memory and avoids production concerns such as persistence, deployment
 hardening, user accounts, or durable audit history.
 
-A future `full-viewer/` should reuse the same viewing experience from
-`lite-viewer/`: components, visual styling, parsing behavior, filtering behavior,
-and interaction patterns should stay equivalent unless there is a deliberate
-product reason to diverge. Production-only concerns should be layered around the
-viewer experience rather than replacing it.
+Shared frontend elements live in `components/`. Both `lite-viewer/` and the
+future `full-viewer/` should use those same templates, styles, browser behavior,
+and assets so viewing experience changes apply to both viewers. Production-only
+concerns should be layered around the shared viewer experience rather than
+replacing it.
 
 ## Repository Layout
 
 ```text
+components/        Shared viewer templates, styles, JavaScript, and assets
 lite-viewer/       Developer-focused FastAPI viewer
+full-viewer/       Placeholder for the future production-oriented viewer
 requirements.txt   Python dependencies for the current viewer
 ```
 
@@ -38,7 +40,7 @@ requirements.txt   Python dependencies for the current viewer
 
 ### Alerts Panel
 
-- `Push demo alert` injects a hard-coded example detection path
+- `Push demo alert` injects an image-backed example detection path
 - `Clear alerts` removes all alerts from the panel
 - websocket URL input lets you change the upstream feed without restarting
 - `Connect` applies the websocket URL and triggers an immediate reconnect attempt
@@ -163,6 +165,19 @@ curl -X POST http://127.0.0.1:8765/api/mock-alert \
       }
     ]
   }'
+```
+
+The repo includes a 640x480 black/white vertical stripe image for image-bearing
+mock payloads:
+
+```text
+components/static/assets/sample-striped-640x480.png
+```
+
+Use it as a data URL in `snapshots.T2` or `snapshots.RGB1`:
+
+```bash
+IMAGE_DATA="data:image/png;base64,$(base64 -w0 components/static/assets/sample-striped-640x480.png)"
 ```
 
 ### Grab a Single Frame from Thermal RTSP

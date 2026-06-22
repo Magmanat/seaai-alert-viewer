@@ -345,6 +345,21 @@ async function clearAlerts() {
   }
 }
 
+async function loadSampleSnapshotDataUrl() {
+  const response = await fetch("/static/assets/sample-striped-640x480.png");
+  if (!response.ok) {
+    throw new Error(`Failed to load sample image (${response.status})`);
+  }
+
+  const blob = await response.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function pushDemoAlert() {
   if (pushDemoAlertButton.disabled) {
     return;
@@ -352,26 +367,33 @@ async function pushDemoAlert() {
 
   pushDemoAlertButton.disabled = true;
 
-  const payload = {
-    datetime: new Date().toISOString(),
-    objects: [
-      {
-        track_id: "1",
-        classification: "VESSEL",
-        bearing_identification: "APPROACHING",
-        confidence_level: 0.92,
-        position_history: [
-          [800, 2],
-          [700, 1],
-          [600, 0],
-          [500, -1],
-        ],
-        position: [400, 0],
-      },
-    ],
-  };
-
   try {
+    const sampleSnapshot = await loadSampleSnapshotDataUrl();
+    const payload = {
+      datetime: new Date().toISOString(),
+      snapshots: {
+        T2: sampleSnapshot,
+      },
+      objects: [
+        {
+          track_id: "1",
+          classification: "VESSEL",
+          bearing_identification: "APPROACHING",
+          confidence_level: 0.92,
+          position_history: [
+            [800, 2],
+            [700, 1],
+            [600, 0],
+            [500, -1],
+          ],
+          position: [400, 0],
+          bounding_boxes: {
+            T2: [0.3, 0.25, 0.7, 0.75],
+          },
+        },
+      ],
+    };
+
     const response = await fetch("/api/mock-alert", {
       method: "POST",
       headers: {

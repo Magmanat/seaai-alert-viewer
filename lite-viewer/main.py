@@ -16,8 +16,9 @@ from state import MemoryState
 
 
 APP_DIR = Path(__file__).resolve().parent
-STATIC_DIR = APP_DIR / "static"
-TEMPLATES_DIR = APP_DIR / "templates"
+COMPONENTS_DIR = APP_DIR.parent / "components"
+STATIC_DIR = COMPONENTS_DIR / "static"
+TEMPLATES_DIR = COMPONENTS_DIR / "templates"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
