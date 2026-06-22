@@ -532,20 +532,12 @@ function updateTimelineControls() {
   if (!timelineSlider || !timelineCurrentLabel || !timelineLiveButton) {
     return;
   }
-  const now = new Date();
-  const today = formatDateKey(now);
-  if (!state.timelineDate) {
-    state.timelineDate = today;
-  }
+  state.timelineDate = state.timelineDate || formatDateKey(new Date());
   const maxTimelineSecond = getMaxTimelineSecond(state.timelineDate);
-  if (state.timelineMode === "live" && !state.timelineDragging) {
-    state.timelineSecond = maxTimelineSecond;
-  } else if (!state.timelineDragging) {
-    state.timelineSecond = Math.min(state.timelineSecond, maxTimelineSecond);
-  }
   timelineSlider.max = "86399";
+  timelineSlider.disabled = false;
   if (!state.timelineDragging) {
-    timelineSlider.value = String(state.timelineSecond);
+    timelineSlider.value = String(Math.min(state.timelineSecond, maxTimelineSecond));
   }
   timelineCurrentLabel.textContent =
     state.timelineMode === "live"
@@ -619,15 +611,17 @@ async function loadTimelineTracks() {
   });
   try {
     const response = await fetch(`/api/timeline?${params.toString()}`);
-    if (!response.ok || state.timelineRequestId !== requestId) {
+    if (!response.ok || state.timelineRequestId !== requestId || state.timelineMode !== "history") {
       return;
     }
     const payload = await response.json();
     state.timelineTracks = payload.tracks || [];
-  } finally {
-    state.timelineLoading = false;
-    updateTimelineControls();
     renderMap();
+  } finally {
+    if (state.timelineRequestId === requestId) {
+      state.timelineLoading = false;
+    }
+    updateTimelineControls();
   }
 }
 
@@ -646,6 +640,9 @@ function enterLiveMode() {
 function enterHistoryMode(date, second) {
   state.timelineMode = "history";
   state.timelineDate = date;
+  if (timelineDateSelect && timelineDateSelect.value !== date) {
+    timelineDateSelect.value = date;
+  }
   state.timelineSecond = Math.min(Math.max(0, second), getMaxTimelineSecond(date));
   updateTimelineControls();
   scheduleTimelineLoad();
@@ -2034,6 +2031,16 @@ timelineSlider?.addEventListener("change", () => {
     Number(timelineSlider.value) || 0,
   );
 });
+window.addEventListener("pointerup", () => {
+  if (!state.timelineDragging) {
+    return;
+  }
+  state.timelineDragging = false;
+  enterHistoryMode(
+    timelineDateSelect?.value || formatDateKey(new Date()),
+    Number(timelineSlider.value) || 0,
+  );
+});
 timelineLiveButton?.addEventListener("click", enterLiveMode);
 if (createUserForm) {
   createUserForm.addEventListener("submit", createUser);
@@ -2339,10 +2346,24 @@ function advanceHistoryTimeline() {
   scheduleTimelineLoad();
 }
 
+function advanceLiveTimeline() {
+  if (state.timelineMode !== "live" || state.timelineDragging) {
+    return;
+  }
+  const now = new Date();
+  const today = formatDateKey(now);
+  state.timelineDate = today;
+  state.timelineSecond = getLocalSecondOfDay(now);
+  if (timelineDateSelect && timelineDateSelect.value !== today) {
+    timelineDateSelect.value = today;
+  }
+}
+
 window.setInterval(() => {
   if (!state.snapshot) {
     return;
   }
+  advanceLiveTimeline();
   advanceHistoryTimeline();
   if (!state.timelineDragging) {
     updateTimelineControls();
