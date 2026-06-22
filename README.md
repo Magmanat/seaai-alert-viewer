@@ -40,7 +40,7 @@ requirements.txt   Python dependencies for the current viewer
 
 ### Alerts Panel
 
-- `Push demo alert` injects an image-backed example detection path
+- `Push demo alert` cycles through image-backed vessel/swimmer demo paths
 - `Clear alerts` removes all alerts from the panel
 - websocket URL input lets you change the upstream feed without restarting
 - `Connect` applies the websocket URL and triggers an immediate reconnect attempt
@@ -179,6 +179,13 @@ Use it as a data URL in `snapshots.T2` or `snapshots.RGB1`:
 ```bash
 IMAGE_DATA="data:image/png;base64,$(base64 -w0 components/static/assets/sample-striped-640x480.png)"
 ```
+
+The UI `Push demo alert` button cycles through dummy cases covering:
+
+- vessel approaching
+- vessel lateral crossing left and right
+- swimmer approaching
+- swimmer lateral crossing left and right
 
 ### Grab a Single Frame from Thermal RTSP
 

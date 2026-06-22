@@ -10,6 +10,7 @@ const state = {
   alertAudioLoadingPromise: null,
   alertAudioReady: false,
   upstreamUrl: "",
+  demoAlertIndex: 0,
   filters: {
     bearing: new Set(),
     type: new Set(),
@@ -77,6 +78,62 @@ const modalEmpty = document.getElementById("modal-empty");
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ALERT_SOUND_URL = "/static/assets/alert_sound.mp3";
+const DEMO_ALERTS = [
+  {
+    track_id: "vessel-approaching",
+    classification: "VESSEL",
+    bearing_identification: "APPROACHING",
+    confidence_level: 0.92,
+    position_history: [[800, 2], [700, 1], [600, 0], [500, -1]],
+    position: [400, 0],
+    bounding_boxes: { T2: [0.3, 0.25, 0.7, 0.75] },
+  },
+  {
+    track_id: "vessel-lateral-left",
+    classification: "VESSEL",
+    bearing_identification: "LATERAL_CROSSING",
+    confidence_level: 0.88,
+    position_history: [[650, 32], [620, 20], [600, 8], [590, -4]],
+    position: [580, -16],
+    bounding_boxes: { T2: [0.12, 0.28, 0.42, 0.72] },
+  },
+  {
+    track_id: "vessel-lateral-right",
+    classification: "VESSEL",
+    bearing_identification: "LATERAL_CROSSING",
+    confidence_level: 0.86,
+    position_history: [[650, -32], [620, -20], [600, -8], [590, 4]],
+    position: [580, 16],
+    bounding_boxes: { T2: [0.58, 0.28, 0.88, 0.72] },
+  },
+  {
+    track_id: "swimmer-approaching",
+    classification: "SWIMMER",
+    bearing_identification: "APPROACHING",
+    confidence_level: 0.81,
+    position_history: [[380, -10], [330, -8], [280, -6], [230, -4]],
+    position: [180, -3],
+    bounding_boxes: { T2: [0.4, 0.18, 0.58, 0.62] },
+  },
+  {
+    track_id: "swimmer-lateral-left",
+    classification: "SWIMMER",
+    bearing_identification: "LATERAL_CROSSING",
+    confidence_level: 0.79,
+    position_history: [[360, 28], [350, 16], [340, 5], [330, -6]],
+    position: [320, -18],
+    bounding_boxes: { T2: [0.18, 0.22, 0.36, 0.64] },
+  },
+  {
+    track_id: "swimmer-lateral-right",
+    classification: "SWIMMER",
+    bearing_identification: "LATERAL_CROSSING",
+    confidence_level: 0.77,
+    position_history: [[360, -28], [350, -16], [340, -5], [330, 6]],
+    position: [320, 18],
+    bounding_boxes: { T2: [0.64, 0.22, 0.82, 0.64] },
+  },
+];
 
 function normalizeUpstreamUrl(value) {
   const trimmed = value.trim();
@@ -369,29 +426,13 @@ async function pushDemoAlert() {
 
   try {
     const sampleSnapshot = await loadSampleSnapshotDataUrl();
+    const demoAlert = DEMO_ALERTS[state.demoAlertIndex % DEMO_ALERTS.length];
     const payload = {
       datetime: new Date().toISOString(),
       snapshots: {
         T2: sampleSnapshot,
       },
-      objects: [
-        {
-          track_id: "1",
-          classification: "VESSEL",
-          bearing_identification: "APPROACHING",
-          confidence_level: 0.92,
-          position_history: [
-            [800, 2],
-            [700, 1],
-            [600, 0],
-            [500, -1],
-          ],
-          position: [400, 0],
-          bounding_boxes: {
-            T2: [0.3, 0.25, 0.7, 0.75],
-          },
-        },
-      ],
+      objects: [demoAlert],
     };
 
     const response = await fetch("/api/mock-alert", {
@@ -404,6 +445,7 @@ async function pushDemoAlert() {
     if (!response.ok) {
       throw new Error(`Failed to push demo alert (${response.status})`);
     }
+    state.demoAlertIndex += 1;
   } catch (error) {
     window.alert(
       error instanceof Error ? error.message : "Failed to push demo alert",
