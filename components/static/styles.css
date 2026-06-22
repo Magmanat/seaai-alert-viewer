@@ -962,6 +962,22 @@ body.modalOpen {
   gap: 8px;
 }
 
+.modalGoToAlertButton {
+  position: absolute;
+  top: 12px;
+  right: 64px;
+  z-index: 3;
+  appearance: none;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .modalViewButton {
   appearance: none;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -1032,7 +1048,8 @@ body.modalOpen {
 
 @media (hover: hover) and (pointer: fine) {
   .modalCloseButton:hover,
-  .modalViewButton:hover {
+  .modalViewButton:hover,
+  .modalGoToAlertButton:hover {
     background: rgba(0, 0, 0, 0.8);
     color: white;
   }

@@ -239,7 +239,9 @@ async def list_users(_: dict[str, Any] = Depends(admin_user)) -> dict[str, Any]:
 
 
 @app.post("/api/admin/users")
-async def create_user(request: Request, _: dict[str, Any] = Depends(admin_user)) -> dict[str, Any]:
+async def create_user(
+    request: Request, _: dict[str, Any] = Depends(admin_user)
+) -> dict[str, Any]:
     payload = await request.json()
     username = str(payload.get("username", "")).strip()
     password = str(payload.get("password", ""))
@@ -253,7 +255,9 @@ async def create_user(request: Request, _: dict[str, Any] = Depends(admin_user))
 
 
 @app.delete("/api/admin/users/{user_id}")
-async def delete_user(user_id: int, _: dict[str, Any] = Depends(admin_user)) -> dict[str, bool]:
+async def delete_user(
+    user_id: int, _: dict[str, Any] = Depends(admin_user)
+) -> dict[str, bool]:
     deleted = database.delete_user(user_id)
     if not deleted:
         raise HTTPException(status_code=400, detail="User cannot be deleted")

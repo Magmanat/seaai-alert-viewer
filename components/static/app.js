@@ -115,6 +115,7 @@ const logoutButton = document.getElementById("logout-button");
 
 const modalOverlay = document.getElementById("alert-modal");
 const modalClose = document.getElementById("modal-close");
+const modalGoToAlert = document.getElementById("modal-go-to-alert");
 const modalViewToggle = document.getElementById("modal-view-toggle");
 const modalImageContainer = document.getElementById("modal-image-container");
 const modalAlertMap = document.getElementById("modal-alert-map");
@@ -355,6 +356,22 @@ function formatSecondOfDay(second) {
 
 function getLocalSecondOfDay(date = new Date()) {
   return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
+}
+
+function ensureTimelineDateOption(dateKey) {
+  if (!timelineDateSelect) {
+    return;
+  }
+  const exists = Array.from(timelineDateSelect.options).some(
+    (option) => option.value === dateKey,
+  );
+  if (exists) {
+    return;
+  }
+  const option = document.createElement("option");
+  option.value = dateKey;
+  option.textContent = dateKey;
+  timelineDateSelect.appendChild(option);
 }
 
 function getMaxTimelineSecond(dateKey) {
@@ -1789,6 +1806,22 @@ function closeModal() {
   document.body.classList.remove("modalOpen");
 }
 
+function goToModalAlertTime() {
+  const alert = getAlertById(state.modalAlertId);
+  if (!alert?.timestampMs) {
+    return;
+  }
+  const alertDate = new Date(alert.timestampMs);
+  const dateKey = formatDateKey(alertDate);
+  const second = getLocalSecondOfDay(alertDate);
+  ensureTimelineDateOption(dateKey);
+  if (timelineDateSelect) {
+    timelineDateSelect.value = dateKey;
+  }
+  closeModal();
+  enterHistoryMode(dateKey, second);
+}
+
 function zoomModalImage(clientX, clientY, nextScale) {
   if (modalZoomWrapper.hidden || !modalImage.complete || !modalImage.naturalWidth) {
     return;
@@ -2213,6 +2246,7 @@ modalOverlay.addEventListener("click", (event) => {
 });
 
 modalClose.addEventListener("click", closeModal);
+modalGoToAlert?.addEventListener("click", goToModalAlertTime);
 
 modalViewToggle.addEventListener("click", (event) => {
   const button = event.target.closest("[data-view]");
