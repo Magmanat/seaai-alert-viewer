@@ -538,13 +538,15 @@ function updateTimelineControls() {
     state.timelineDate = today;
   }
   const maxTimelineSecond = getMaxTimelineSecond(state.timelineDate);
-  if (state.timelineMode === "live") {
+  if (state.timelineMode === "live" && !state.timelineDragging) {
     state.timelineSecond = maxTimelineSecond;
-  } else {
+  } else if (!state.timelineDragging) {
     state.timelineSecond = Math.min(state.timelineSecond, maxTimelineSecond);
   }
   timelineSlider.max = "86399";
-  timelineSlider.value = String(state.timelineSecond);
+  if (!state.timelineDragging) {
+    timelineSlider.value = String(state.timelineSecond);
+  }
   timelineCurrentLabel.textContent =
     state.timelineMode === "live"
       ? `Live ${formatSecondOfDay(state.timelineSecond)}`
@@ -2012,15 +2014,25 @@ timelineSlider?.addEventListener("input", () => {
 });
 timelineSlider?.addEventListener("pointerdown", () => {
   state.timelineDragging = true;
+  state.timelineMode = "history";
+  timelineLiveButton?.classList.remove("isLive");
 });
 timelineSlider?.addEventListener("pointerup", () => {
   state.timelineDragging = false;
+  enterHistoryMode(
+    timelineDateSelect?.value || formatDateKey(new Date()),
+    Number(timelineSlider.value) || 0,
+  );
 });
 timelineSlider?.addEventListener("pointercancel", () => {
   state.timelineDragging = false;
 });
 timelineSlider?.addEventListener("change", () => {
   state.timelineDragging = false;
+  enterHistoryMode(
+    timelineDateSelect?.value || formatDateKey(new Date()),
+    Number(timelineSlider.value) || 0,
+  );
 });
 timelineLiveButton?.addEventListener("click", enterLiveMode);
 if (createUserForm) {
@@ -2332,7 +2344,9 @@ window.setInterval(() => {
     return;
   }
   advanceHistoryTimeline();
-  updateTimelineControls();
+  if (!state.timelineDragging) {
+    updateTimelineControls();
+  }
   updateStatus(state.snapshot);
   renderMap();
 }, 1000);
