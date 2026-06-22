@@ -25,6 +25,13 @@ const state = {
   uiSocketWatchdogTimer: null,
   uiSocketRetryMs: 1000,
   uiSocketLastMessageAt: 0,
+  mapWindowSeconds: 60,
+  timelineMode: "live",
+  timelineDate: "",
+  timelineMinute: 0,
+  timelineTracks: null,
+  timelineLoading: false,
+  timelineRequestId: 0,
   filters: {
     bearing: new Set(),
     type: new Set(),
@@ -81,6 +88,11 @@ const mapStage = document.getElementById("map-stage");
 const mapSvg = document.getElementById("map-svg");
 const mapOverlay = document.getElementById("map-overlay");
 const mapEmpty = document.getElementById("map-empty");
+const mapWindowButtons = document.getElementById("map-window-buttons");
+const timelineDateSelect = document.getElementById("timeline-date");
+const timelineLiveButton = document.getElementById("timeline-live");
+const timelineSlider = document.getElementById("timeline-slider");
+const timelineCurrentLabel = document.getElementById("timeline-current-label");
 const alertsList = document.getElementById("alerts-list");
 const alertsEmpty = document.getElementById("alerts-empty");
 const alertCount = document.getElementById("alert-count");
@@ -323,6 +335,23 @@ function formatTimestamp(timestampMs) {
     .replace(",", "");
 }
 
+function formatDateKey(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatMinuteOfDay(minute) {
+  const hours = Math.floor(minute / 60);
+  const minutes = minute % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function getUtcMinuteOfDay(date = new Date()) {
+  return date.getUTCHours() * 60 + date.getUTCMinutes();
+}
+
 function formatLastMessage(snapshot) {
   const lastMessageAtMs = snapshot?.status?.lastMessageAtMs;
   if (!lastMessageAtMs) {
@@ -476,8 +505,131 @@ function getFilteredAlerts() {
 }
 
 function getFilteredTracks() {
-  const tracks = state.snapshot?.tracks || [];
+  const tracks = getActiveMapTracks();
   return tracks.filter(matchesActiveFilters);
+}
+
+function getActiveMapTracks() {
+  if (state.timelineMode === "history") {
+    return state.timelineTracks || [];
+  }
+  const tracks = state.snapshot?.tracks || [];
+  const windowMs = state.mapWindowSeconds * 1000;
+  const nowMs = Date.now();
+  return tracks.filter((track) => nowMs - track.timestampMs <= windowMs);
+}
+
+function updateTimelineControls() {
+  if (!timelineSlider || !timelineCurrentLabel || !timelineLiveButton) {
+    return;
+  }
+  const now = new Date();
+  const today = formatDateKey(now);
+  if (!state.timelineDate) {
+    state.timelineDate = today;
+  }
+  if (state.timelineMode === "live") {
+    state.timelineMinute = getUtcMinuteOfDay(now);
+  }
+  timelineSlider.value = String(state.timelineMinute);
+  timelineCurrentLabel.textContent =
+    state.timelineMode === "live"
+      ? `Live ${formatMinuteOfDay(state.timelineMinute)} UTC`
+      : `${state.timelineDate} ${formatMinuteOfDay(state.timelineMinute)} UTC`;
+  timelineLiveButton.disabled = state.timelineMode === "live";
+  mapWindowButtons?.querySelectorAll(".mapWindowButton").forEach((button) => {
+    button.classList.toggle(
+      "active",
+      Number(button.dataset.windowSeconds) === state.mapWindowSeconds,
+    );
+  });
+}
+
+async function loadTimelineDates() {
+  if (!timelineDateSelect) {
+    return;
+  }
+  const today = formatDateKey(new Date());
+  let dates = [today];
+  if (state.session.mode === "full") {
+    try {
+      const response = await fetch("/api/timeline/dates");
+      if (response.ok) {
+        const payload = await response.json();
+        dates = Array.from(new Set([today, ...(payload.dates || [])]));
+      }
+    } catch {
+      dates = [today];
+    }
+  }
+  timelineDateSelect.innerHTML = dates
+    .map((date) => `<option value="${escapeHtml(date)}">${escapeHtml(date)}</option>`)
+    .join("");
+  state.timelineDate = dates.includes(state.timelineDate) ? state.timelineDate : today;
+  timelineDateSelect.value = state.timelineDate;
+}
+
+let timelineLoadTimer = null;
+
+function scheduleTimelineLoad() {
+  if (timelineLoadTimer) {
+    window.clearTimeout(timelineLoadTimer);
+  }
+  timelineLoadTimer = window.setTimeout(() => {
+    timelineLoadTimer = null;
+    void loadTimelineTracks();
+  }, 180);
+}
+
+async function loadTimelineTracks() {
+  if (state.timelineMode !== "history") {
+    return;
+  }
+  if (state.session.mode !== "full") {
+    state.timelineTracks = [];
+    renderMap();
+    return;
+  }
+  const requestId = state.timelineRequestId + 1;
+  state.timelineRequestId = requestId;
+  state.timelineLoading = true;
+  const params = new URLSearchParams({
+    date: state.timelineDate,
+    minute: String(state.timelineMinute),
+    window_seconds: String(state.mapWindowSeconds),
+  });
+  try {
+    const response = await fetch(`/api/timeline?${params.toString()}`);
+    if (!response.ok || state.timelineRequestId !== requestId) {
+      return;
+    }
+    const payload = await response.json();
+    state.timelineTracks = payload.tracks || [];
+  } finally {
+    state.timelineLoading = false;
+    updateTimelineControls();
+    renderMap();
+  }
+}
+
+function enterLiveMode() {
+  state.timelineMode = "live";
+  state.timelineTracks = null;
+  state.timelineDate = formatDateKey(new Date());
+  state.timelineMinute = getUtcMinuteOfDay();
+  if (timelineDateSelect) {
+    timelineDateSelect.value = state.timelineDate;
+  }
+  updateTimelineControls();
+  renderMap();
+}
+
+function enterHistoryMode(date, minute) {
+  state.timelineMode = "history";
+  state.timelineDate = date;
+  state.timelineMinute = minute;
+  updateTimelineControls();
+  scheduleTimelineLoad();
 }
 
 function updateUpstreamUrlInput() {
@@ -981,13 +1133,13 @@ function renderMap() {
   const snapshot = state.snapshot;
   const tracks = getFilteredTracks();
   const maxDistanceM = snapshot?.map?.maxDistanceM || 1000;
-  const trackWindowMs = snapshot?.map?.trackWindowMs || 60000;
+  const trackWindowMs = state.mapWindowSeconds * 1000;
   const geometry = getGeometry(mapRoot, maxDistanceM);
 
   applyMapTransform();
 
   trackCount.textContent = String(tracks.length);
-  mapEmpty.style.display = tracks.length ? "none" : "block";
+  mapEmpty.style.display = "none";
   mapSvg.setAttribute("viewBox", `0 0 ${geometry.width} ${geometry.height}`);
   mapSvg.innerHTML = "";
   mapOverlay.innerHTML = "";
@@ -1072,7 +1224,10 @@ function renderMap() {
     .sort((left, right) => left.timestampMs - right.timestampMs)
     .forEach((track) => {
       const ageMs = Math.max(0, nowMs - track.timestampMs);
-      const opacity = Math.max(0, Math.min(1, 1 - ageMs / trackWindowMs));
+      const opacity =
+        state.timelineMode === "live"
+          ? Math.max(0, Math.min(1, 1 - ageMs / trackWindowMs))
+          : 1;
       if (opacity <= 0) {
         return;
       }
@@ -1628,6 +1783,7 @@ function renderAll() {
 
 async function bootstrap() {
   await loadSession();
+  await loadTimelineDates();
   const [stateResponse, configResponse] = await Promise.all([
     fetch("/api/state"),
     fetch("/api/config/upstream-websocket"),
@@ -1637,6 +1793,7 @@ async function bootstrap() {
   state.upstreamUrl =
     typeof configPayload?.url === "string" ? configPayload.url : "";
   updateUpstreamUrlInput();
+  enterLiveMode();
   renderAll();
 }
 
@@ -1746,6 +1903,29 @@ clearAlertsButton.addEventListener("click", clearAlerts);
 pushDemoAlertButton.addEventListener("click", pushDemoAlert);
 applyUpstreamUrlButton.addEventListener("click", applyUpstreamUrl);
 alertsList.addEventListener("scroll", maybeLoadMoreAlerts);
+mapWindowButtons?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-window-seconds]");
+  if (!button) {
+    return;
+  }
+  state.mapWindowSeconds = Number(button.dataset.windowSeconds) || 60;
+  updateTimelineControls();
+  if (state.timelineMode === "history") {
+    scheduleTimelineLoad();
+  } else {
+    renderMap();
+  }
+});
+timelineDateSelect?.addEventListener("change", () => {
+  enterHistoryMode(timelineDateSelect.value, Number(timelineSlider.value) || 0);
+});
+timelineSlider?.addEventListener("input", () => {
+  enterHistoryMode(
+    timelineDateSelect?.value || formatDateKey(new Date()),
+    Number(timelineSlider.value) || 0,
+  );
+});
+timelineLiveButton?.addEventListener("click", enterLiveMode);
 if (createUserForm) {
   createUserForm.addEventListener("submit", createUser);
 }
@@ -2040,6 +2220,7 @@ window.setInterval(() => {
   if (!state.snapshot) {
     return;
   }
+  updateTimelineControls();
   updateStatus(state.snapshot);
   renderMap();
 }, 1000);

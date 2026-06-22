@@ -187,6 +187,28 @@ class Database:
                 (since_ms,),
             ).fetchall()
 
+    def alerts_between(self, start_ms: int, end_ms: int) -> list[sqlite3.Row]:
+        with self.connect() as connection:
+            return connection.execute(
+                """
+                SELECT * FROM alerts
+                WHERE timestamp_ms >= ? AND timestamp_ms <= ?
+                ORDER BY timestamp_ms ASC, id ASC
+                """,
+                (start_ms, end_ms),
+            ).fetchall()
+
+    def alert_dates(self) -> list[str]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT date(timestamp_ms / 1000, 'unixepoch') AS alert_date
+                FROM alerts
+                ORDER BY alert_date DESC
+                """
+            ).fetchall()
+        return [str(row["alert_date"]) for row in rows if row["alert_date"]]
+
     def get_alert(self, alert_id: int) -> sqlite3.Row | None:
         with self.connect() as connection:
             return connection.execute("SELECT * FROM alerts WHERE id = ?", (alert_id,)).fetchone()

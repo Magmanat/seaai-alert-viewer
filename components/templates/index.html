@@ -19,7 +19,14 @@
         <header class="mapHeader header">
           <div class="title">Tracking Map</div>
           <div class="mapHeaderMeta">
-            <div class="subtleLabel">Past 1 minute</div>
+            <div class="mapWindowButtons" id="map-window-buttons" aria-label="Map time window">
+              <button type="button" class="mapWindowButton active" data-window-seconds="60">1 min</button>
+              <button type="button" class="mapWindowButton" data-window-seconds="120">2 min</button>
+              <button type="button" class="mapWindowButton" data-window-seconds="300">5 min</button>
+              <button type="button" class="mapWindowButton" data-window-seconds="600">10 min</button>
+            </div>
+            <select id="timeline-date" class="timelineDateSelect" aria-label="Timeline date"></select>
+            <button id="timeline-live" class="headerActionButton" type="button">Live</button>
             <div id="track-count" class="countBadge">0</div>
           </div>
         </header>
@@ -36,8 +43,14 @@
               <text x="20" y="14" class="compassLabel">N</text>
             </svg>
           </div>
-          <div id="map-empty" class="mapEmptyState">
-            Waiting for SEAAI detections...
+          <div id="map-empty" class="mapEmptyState"></div>
+          <div class="timelineControl">
+            <div class="timelineLabels">
+              <span id="timeline-start-label">00:00</span>
+              <span id="timeline-current-label">Live</span>
+              <span>23:59</span>
+            </div>
+            <input id="timeline-slider" class="timelineSlider" type="range" min="0" max="1439" step="1" value="0" />
           </div>
         </div>
       </section>

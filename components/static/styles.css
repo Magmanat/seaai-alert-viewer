@@ -118,6 +118,34 @@ body.modalOpen {
   text-align: center;
 }
 
+.timelineControl {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  z-index: 6;
+  padding: 8px 12px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(10, 15, 24, 0.78);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.timelineLabels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.timelineSlider {
+  width: 100%;
+  accent-color: #3b82f6;
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -147,6 +175,47 @@ body.modalOpen {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.mapHeaderMeta {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mapWindowButtons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mapWindowButton {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mapWindowButton.active {
+  background: rgba(59, 130, 246, 0.24);
+  color: #dbeafe;
+}
+
+.timelineDateSelect {
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  padding: 0 8px;
+  font-size: 12px;
 }
 
 .headerActions {

@@ -88,7 +88,7 @@ class PersistentState:
         now_ms = _now_ms()
         rows, total = self.database.list_alerts(limit=limit, offset=offset)
         recent_rows = self.database.recent_alerts(
-            now_ms - self.settings.track_window_seconds * 1000
+            now_ms - max(self.settings.track_window_seconds, 600) * 1000
         )
         tracks_by_id: dict[str, AlertEvent] = {}
         for row in recent_rows:
@@ -130,6 +130,23 @@ class PersistentState:
             "limit": limit,
             "hasMore": offset + len(rows) < total,
         }
+
+    async def timeline_tracks(self, start_ms: int, end_ms: int) -> dict[str, Any]:
+        async with self._lock:
+            rows = self.database.alerts_between(start_ms, end_ms)
+        events = [row_to_event(row) for row in rows]
+        return {
+            "tracks": [serialize_track(event) for event in events],
+            "alerts": [serialize_alert(event) for event in events],
+            "startMs": start_ms,
+            "endMs": end_ms,
+            "count": len(events),
+        }
+
+    async def timeline_dates(self) -> dict[str, Any]:
+        async with self._lock:
+            dates = self.database.alert_dates()
+        return {"dates": dates}
 
     async def get_snapshot_asset(self, group_id: str, kind: str) -> SnapshotAsset | None:
         try:

@@ -5,6 +5,7 @@ import sqlite3
 import sys
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, time as datetime_time, timezone
 from pathlib import Path
 from typing import Any
 
@@ -173,6 +174,37 @@ async def list_alerts(
 ) -> dict[str, Any]:
     page_limit = max(1, min(limit or settings.alert_page_size, 100))
     return await persistent_state.list_alerts(page_limit, max(0, offset))
+
+
+@app.get("/api/timeline/dates")
+async def timeline_dates(_: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    return await persistent_state.timeline_dates()
+
+
+@app.get("/api/timeline")
+async def timeline(
+    end_ms: int | None = None,
+    date: str | None = None,
+    minute: int | None = None,
+    window_seconds: int = 60,
+    _: dict[str, Any] = Depends(current_user),
+) -> dict[str, Any]:
+    clamped_window_seconds = max(60, min(window_seconds, 600))
+    if end_ms is None:
+        if not date:
+            end_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        else:
+            try:
+                selected_date = datetime.strptime(date, "%Y-%m-%d").date()
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
+            clamped_minute = max(0, min(minute if minute is not None else 0, 1439))
+            start_of_day = datetime.combine(
+                selected_date, datetime_time.min, tzinfo=timezone.utc
+            )
+            end_ms = int(start_of_day.timestamp() * 1000) + clamped_minute * 60 * 1000
+    start_ms = end_ms - clamped_window_seconds * 1000
+    return await persistent_state.timeline_tracks(start_ms, end_ms)
 
 
 @app.get("/api/config/upstream-websocket")

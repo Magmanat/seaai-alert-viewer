@@ -44,6 +44,10 @@ rotated out by default.
 Regular users can see the backend websocket connection status, but only admins
 can see or change the upstream websocket URL.
 
+The full-viewer map supports 1, 2, 5, and 10 minute windows. Users can select a
+stored UTC date, scrub through that day with the bottom timeline, and return to
+the current stream with `Live`.
+
 ## Mock Websocket Feed
 
 Run a local websocket feed that emits rotating sample alerts every 5 seconds:
