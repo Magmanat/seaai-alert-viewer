@@ -940,10 +940,6 @@ body.modalOpen {
   pointer-events: none;
 }
 
-.modalAlertMap:empty {
-  display: none;
-}
-
 .modalCloseButton {
   position: absolute;
   top: 12px;
