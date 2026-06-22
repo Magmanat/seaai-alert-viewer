@@ -1,6 +1,26 @@
-# SEAAI Live Monitor
+# SEAAI Alert Viewer
 
-Standalone Python web app for viewing live SEAAI detections in a browser.
+Repository for SEAAI alert viewing tools.
+
+The current implementation lives in `lite-viewer/`. It is a lightweight developer
+viewer for inspecting live SEAAI detections in a browser. It intentionally keeps
+state in memory and avoids production concerns such as persistence, deployment
+hardening, user accounts, or durable audit history.
+
+A future `full-viewer/` should reuse the same viewing experience from
+`lite-viewer/`: components, visual styling, parsing behavior, filtering behavior,
+and interaction patterns should stay equivalent unless there is a deliberate
+product reason to diverge. Production-only concerns should be layered around the
+viewer experience rather than replacing it.
+
+## Repository Layout
+
+```text
+lite-viewer/       Developer-focused FastAPI viewer
+requirements.txt   Python dependencies for the current viewer
+```
+
+## Lite Viewer
 
 ## Features
 
@@ -53,7 +73,7 @@ python3 -m pip install -r requirements.txt
 Basic run:
 
 ```bash
-python3 main.py
+python3 lite-viewer/main.py
 ```
 
 Then open `http://127.0.0.1:8765`.
@@ -69,7 +89,7 @@ ws://localhost:8080/test
 CLI flags override environment variables.
 
 ```bash
-python3 main.py --help
+python3 lite-viewer/main.py --help
 ```
 
 Available flags:
@@ -89,7 +109,7 @@ Available flags:
 Example:
 
 ```bash
-python3 main.py \
+python3 lite-viewer/main.py \
   --host 0.0.0.0 \
   --port 8765 \
   --seaai-ws-url ws://172.26.0.107:9002/v1/alerts \
