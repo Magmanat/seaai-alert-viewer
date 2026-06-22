@@ -100,6 +100,8 @@ const timelineCurrentLabel = document.getElementById("timeline-current-label");
 const alertsList = document.getElementById("alerts-list");
 const alertsEmpty = document.getElementById("alerts-empty");
 const alertCount = document.getElementById("alert-count");
+const filterToggle = document.getElementById("filter-toggle");
+const filterDrawer = document.getElementById("filter-drawer");
 const pushDemoAlertButton = document.getElementById("push-demo-alert");
 const clearAlertsButton = document.getElementById("clear-alerts");
 const upstreamUrlInput = document.getElementById("upstream-url");
@@ -2151,6 +2153,16 @@ function updateFiltersFromInputs() {
   });
 }
 
+function toggleFilterDrawer() {
+  if (!filterDrawer || !filterToggle) {
+    return;
+  }
+  const isOpening = filterDrawer.hidden;
+  filterDrawer.hidden = !isOpening;
+  filterToggle.classList.toggle("active", isOpening);
+  filterToggle.setAttribute("aria-expanded", isOpening ? "true" : "false");
+}
+
 function connectSocket() {
   if (
     state.uiSocket &&
@@ -2237,6 +2249,7 @@ clearAlertsButton.addEventListener("click", clearAlerts);
 pushDemoAlertButton.addEventListener("click", pushDemoAlert);
 applyUpstreamUrlButton.addEventListener("click", applyUpstreamUrl);
 alertsList.addEventListener("scroll", maybeLoadMoreAlerts);
+filterToggle?.addEventListener("click", toggleFilterDrawer);
 applyAlertTimeFilterButton?.addEventListener("click", () => {
   void applyAlertTimeFilter();
 });

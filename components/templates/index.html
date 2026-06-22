@@ -61,6 +61,11 @@
             <div class="titleRow">
               <h1 class="title alertTitle">Alerts</h1>
               <div id="alert-count" class="countBadge">0</div>
+              <button id="filter-toggle" class="filterToggleButton" type="button" aria-expanded="false" aria-controls="filter-drawer" aria-label="Toggle filters">
+                <span></span>
+                <span></span>
+                <span></span>
+              </button>
             </div>
             <div class="headerActions">
               <button id="push-demo-alert" class="headerActionButton" type="button">
@@ -102,39 +107,40 @@
             </form>
             <div id="users-list" class="usersList"></div>
           </div>
-          <div id="filter-panel" class="panelMeta filterPanel">
-            <div class="filterGroup">
-              <span class="filterLabel">Bearing</span>
-              <label class="filterOption">
-                <input type="checkbox" name="bearing" value="Approaching" />
-                <span>Approaching</span>
-              </label>
-              <label class="filterOption">
-                <input type="checkbox" name="bearing" value="Departing" />
-                <span>Departing</span>
-              </label>
-              <label class="filterOption">
-                <input type="checkbox" name="bearing" value="Lateral Crossing" />
-                <span>Lateral crossing</span>
-              </label>
+          <div id="filter-drawer" class="filterDrawer" hidden>
+            <div id="filter-panel" class="panelMeta filterPanel">
+              <div class="filterGroup">
+                <span class="filterLabel">Bearing</span>
+                <label class="filterOption">
+                  <input type="checkbox" name="bearing" value="Approaching" />
+                  <span>Approaching</span>
+                </label>
+                <label class="filterOption">
+                  <input type="checkbox" name="bearing" value="Departing" />
+                  <span>Departing</span>
+                </label>
+                <label class="filterOption">
+                  <input type="checkbox" name="bearing" value="Lateral Crossing" />
+                  <span>Lateral crossing</span>
+                </label>
+              </div>
+              <div class="filterGroup">
+                <span class="filterLabel">Classification</span>
+                <label class="filterOption">
+                  <input type="checkbox" name="type" value="vessel" />
+                  <span>Vessel</span>
+                </label>
+                <label class="filterOption">
+                  <input type="checkbox" name="type" value="swimmer" />
+                  <span>Swimmer</span>
+                </label>
+                <label class="filterOption">
+                  <input type="checkbox" name="type" value="human" />
+                  <span>Human</span>
+                </label>
+              </div>
             </div>
-            <div class="filterGroup">
-              <span class="filterLabel">Classification</span>
-              <label class="filterOption">
-                <input type="checkbox" name="type" value="vessel" />
-                <span>Vessel</span>
-              </label>
-              <label class="filterOption">
-                <input type="checkbox" name="type" value="swimmer" />
-                <span>Swimmer</span>
-              </label>
-              <label class="filterOption">
-                <input type="checkbox" name="type" value="human" />
-                <span>Human</span>
-              </label>
-            </div>
-          </div>
-          <div id="alert-time-filter" class="panelMeta alertTimeFilter">
+            <div id="alert-time-filter" class="panelMeta alertTimeFilter">
             <div class="alertTimeFilterHeader">
               <span class="filterLabel">Time</span>
               <div class="alertTimeFilterActions">
@@ -161,6 +167,7 @@
                   <select id="alert-end-minute" aria-label="End minute"></select>
                 </div>
               </label>
+            </div>
             </div>
           </div>
           <div class="panelMeta">
