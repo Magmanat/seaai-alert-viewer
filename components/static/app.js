@@ -1835,11 +1835,11 @@ function renderAll() {
   renderModal();
 }
 
-function mergeIncomingSnapshot(nextSnapshot) {
+function mergeIncomingSnapshot(nextSnapshot, baseSnapshot = state.snapshot) {
   if (
     nextSnapshot?.viewer?.mode !== "full" ||
     !Array.isArray(nextSnapshot.alerts) ||
-    !Array.isArray(state.snapshot?.alerts)
+    !Array.isArray(baseSnapshot?.alerts)
   ) {
     return nextSnapshot;
   }
@@ -1847,7 +1847,7 @@ function mergeIncomingSnapshot(nextSnapshot) {
   const incomingIds = new Set(
     nextSnapshot.alerts.map((alert) => String(alert.id)),
   );
-  const retainedOlderAlerts = state.snapshot.alerts.filter(
+  const retainedOlderAlerts = baseSnapshot.alerts.filter(
     (alert) => !incomingIds.has(String(alert.id)),
   );
   const mergedAlerts = [...nextSnapshot.alerts, ...retainedOlderAlerts];
@@ -1862,6 +1862,27 @@ function mergeIncomingSnapshot(nextSnapshot) {
   };
 }
 
+function applyIncomingSnapshot(nextSnapshot) {
+  state.latestLiveSnapshot = mergeIncomingSnapshot(
+    nextSnapshot,
+    state.latestLiveSnapshot || state.snapshot,
+  );
+
+  if (state.timelineMode === "live") {
+    state.snapshot = state.latestLiveSnapshot;
+    return;
+  }
+
+  state.snapshot = {
+    ...state.snapshot,
+    appTitle: nextSnapshot.appTitle,
+    viewer: nextSnapshot.viewer || state.snapshot?.viewer,
+    status: nextSnapshot.status || state.snapshot?.status,
+    map: nextSnapshot.map || state.snapshot?.map,
+    alertsTotal: nextSnapshot.alertsTotal ?? state.snapshot?.alertsTotal,
+  };
+}
+
 async function bootstrap() {
   await loadSession();
   await loadTimelineDates();
@@ -1870,6 +1891,7 @@ async function bootstrap() {
     fetch("/api/config/upstream-websocket"),
   ]);
   state.snapshot = await stateResponse.json();
+  state.latestLiveSnapshot = state.snapshot;
   const configPayload = await configResponse.json();
   state.upstreamUrl =
     typeof configPayload?.url === "string" ? configPayload.url : "";
@@ -1923,7 +1945,7 @@ function connectSocket() {
 
   socket.addEventListener("message", (event) => {
     state.uiSocketLastMessageAt = Date.now();
-    state.snapshot = mergeIncomingSnapshot(JSON.parse(event.data));
+    applyIncomingSnapshot(JSON.parse(event.data));
     renderAll();
   });
 
