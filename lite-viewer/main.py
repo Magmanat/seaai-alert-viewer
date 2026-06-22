@@ -44,6 +44,11 @@ async def index() -> FileResponse:
     return FileResponse(TEMPLATES_DIR / "index.html")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    return FileResponse(STATIC_DIR / "assets" / "favicon.jpg", media_type="image/jpeg")
+
+
 @app.get("/health")
 async def health() -> dict:
     snapshot = await memory_state.build_snapshot()
