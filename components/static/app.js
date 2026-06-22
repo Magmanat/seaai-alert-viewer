@@ -637,7 +637,17 @@ function enterLiveMode() {
   renderMap();
 }
 
-function enterHistoryMode(date, second) {
+function isUserInteracting() {
+  return Boolean(
+    state.timelineDragging ||
+      state.mapView.pointerId !== null ||
+      state.modalMapView.pointerId !== null ||
+      state.modalImageView.pointerId !== null,
+  );
+}
+
+function enterHistoryMode(date, second, options = {}) {
+  const shouldLoad = options.load !== false;
   state.timelineMode = "history";
   state.timelineDate = date;
   if (timelineDateSelect && timelineDateSelect.value !== date) {
@@ -645,7 +655,9 @@ function enterHistoryMode(date, second) {
   }
   state.timelineSecond = Math.min(Math.max(0, second), getMaxTimelineSecond(date));
   updateTimelineControls();
-  scheduleTimelineLoad();
+  if (shouldLoad) {
+    scheduleTimelineLoad();
+  }
 }
 
 function updateUpstreamUrlInput() {
@@ -2029,6 +2041,7 @@ timelineSlider?.addEventListener("input", () => {
   enterHistoryMode(
     timelineDateSelect?.value || formatDateKey(new Date()),
     Number(timelineSlider.value) || 0,
+    { load: !state.timelineDragging },
   );
 });
 timelineSlider?.addEventListener("pointerdown", () => {
@@ -2355,7 +2368,7 @@ window.addEventListener("resize", () => {
 });
 
 function advanceHistoryTimeline() {
-  if (state.timelineMode !== "history" || state.timelineDragging) {
+  if (state.timelineMode !== "history" || isUserInteracting()) {
     return;
   }
   const maxTimelineSecond = getMaxTimelineSecond(state.timelineDate);
@@ -2369,7 +2382,7 @@ function advanceHistoryTimeline() {
 }
 
 function advanceLiveTimeline() {
-  if (state.timelineMode !== "live" || state.timelineDragging) {
+  if (state.timelineMode !== "live" || isUserInteracting()) {
     return;
   }
   const now = new Date();
@@ -2385,11 +2398,12 @@ window.setInterval(() => {
   if (!state.snapshot) {
     return;
   }
+  if (isUserInteracting()) {
+    return;
+  }
   advanceLiveTimeline();
   advanceHistoryTimeline();
-  if (!state.timelineDragging) {
-    updateTimelineControls();
-  }
+  updateTimelineControls();
   updateStatus(state.snapshot);
   renderMap();
 }, 1000);
