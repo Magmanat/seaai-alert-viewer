@@ -1499,7 +1499,6 @@ function renderModal() {
   }
 
   const activeMedia = getAlertMedia(alert, state.modalView);
-  renderModalAlertMap(alert);
   state.modalView = activeMedia?.view || null;
   const sourceKey = activeMedia?.url || null;
   if (state.modalImageView.sourceKey !== sourceKey) {
@@ -1509,6 +1508,7 @@ function renderModal() {
   modalOverlay.hidden = false;
   modalOverlay.setAttribute("aria-hidden", "false");
   document.body.classList.add("modalOpen");
+  requestAnimationFrame(() => renderModalAlertMap(alert));
   renderModalToggle(alert);
 
   if (!activeMedia?.url) {
