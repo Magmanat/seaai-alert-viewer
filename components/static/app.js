@@ -589,6 +589,29 @@ function buildAlertQueryParams(offset, limit) {
   return params;
 }
 
+function alertMatchesTimeFilter(alert) {
+  if (!state.alertTimeFilterActive) {
+    return true;
+  }
+  const timestampMs = Number(alert?.timestampMs);
+  if (!Number.isFinite(timestampMs)) {
+    return false;
+  }
+  if (
+    state.alertTimeFilterStartMs !== null &&
+    timestampMs < state.alertTimeFilterStartMs
+  ) {
+    return false;
+  }
+  if (
+    state.alertTimeFilterEndMs !== null &&
+    timestampMs > state.alertTimeFilterEndMs
+  ) {
+    return false;
+  }
+  return true;
+}
+
 async function reloadAlertPage() {
   if (state.session.mode !== "full") {
     renderAlerts();
@@ -2055,13 +2078,34 @@ function applyIncomingSnapshot(nextSnapshot) {
     return;
   }
 
+  if (state.alertTimeFilterActive && Array.isArray(nextSnapshot.alerts)) {
+    const currentAlerts = state.snapshot?.alerts || [];
+    const currentIds = new Set(currentAlerts.map((alert) => String(alert.id)));
+    const matchingIncomingAlerts = nextSnapshot.alerts.filter(
+      (alert) => alertMatchesTimeFilter(alert) && !currentIds.has(String(alert.id)),
+    );
+
+    if (matchingIncomingAlerts.length > 0) {
+      state.snapshot = {
+        ...state.snapshot,
+        alerts: [...matchingIncomingAlerts, ...currentAlerts],
+        alertsTotal:
+          (Number.isFinite(state.snapshot?.alertsTotal)
+            ? state.snapshot.alertsTotal
+            : currentAlerts.length) + matchingIncomingAlerts.length,
+      };
+    }
+  }
+
   state.snapshot = {
     ...state.snapshot,
     appTitle: nextSnapshot.appTitle,
     viewer: nextSnapshot.viewer || state.snapshot?.viewer,
     status: nextSnapshot.status || state.snapshot?.status,
     map: nextSnapshot.map || state.snapshot?.map,
-    alertsTotal: nextSnapshot.alertsTotal ?? state.snapshot?.alertsTotal,
+    alertsTotal: state.alertTimeFilterActive
+      ? state.snapshot?.alertsTotal
+      : nextSnapshot.alertsTotal ?? state.snapshot?.alertsTotal,
   };
 }
 
