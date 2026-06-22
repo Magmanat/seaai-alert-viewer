@@ -344,9 +344,18 @@ function applyViewerPermissions(snapshot = null) {
   applyUpstreamUrlButton.hidden = !canConfigureWebsocket;
   if (!canConfigureWebsocket) {
     upstreamUrlInput.title = "Only admin users can change the upstream websocket URL";
+    upstreamUrlInput.placeholder = "Configured by admin";
+    state.upstreamUrl = "";
+    updateUpstreamUrlInput();
+  } else {
+    upstreamUrlInput.title = "";
+    upstreamUrlInput.placeholder = "ws://host:port/path";
   }
   if (adminPanel) {
     adminPanel.hidden = !canManageUsers;
+  }
+  if (logoutButton) {
+    logoutButton.hidden = state.session.mode !== "full";
   }
   if (canManageUsers) {
     void loadUsers();
@@ -466,7 +475,8 @@ async function loadUpstreamUrl() {
   }
 
   const payload = await response.json();
-  state.upstreamUrl = typeof payload?.url === "string" ? payload.url : "";
+  state.upstreamUrl =
+    payload?.editable && typeof payload?.url === "string" ? payload.url : "";
   updateUpstreamUrlInput();
 }
 

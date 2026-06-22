@@ -41,6 +41,23 @@ The full viewer stores users/settings/alerts in SQLite and snapshot images on
 the filesystem under `full-viewer/data/`. Alerts and media older than 90 days are
 rotated out by default.
 
+Regular users can see the backend websocket connection status, but only admins
+can see or change the upstream websocket URL.
+
+## Mock Websocket Feed
+
+Run a local websocket feed that emits rotating sample alerts every 5 seconds:
+
+```bash
+python3 scripts/simulate_alert_websocket.py
+```
+
+Then configure the viewer websocket URL as:
+
+```text
+ws://127.0.0.1:8899/test
+```
+
 ## Lite Viewer
 
 ## Features

@@ -176,7 +176,9 @@ async def list_alerts(
 
 @app.get("/api/config/upstream-websocket")
 async def get_upstream_websocket_config(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    return {"url": seaai_client.get_ws_url(), "editable": user["role"] == "admin"}
+    if user["role"] != "admin":
+        return {"url": "", "editable": False}
+    return {"url": seaai_client.get_ws_url(), "editable": True}
 
 
 @app.post("/api/config/upstream-websocket")

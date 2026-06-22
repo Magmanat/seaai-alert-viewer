@@ -40,7 +40,19 @@ Git.
 ## Notes
 
 - Regular users can view alerts, images, tracks, and backend websocket status.
+- Regular users cannot see or change the upstream websocket URL.
 - Admin users can create/delete regular users and change the upstream websocket URL.
 - `Push demo alert` and `Clear alerts` are disabled in full-viewer mode.
 - Snapshot image blobs are stored on disk under `full-viewer/data/media/`.
 - `RETENTION_DAYS` controls automatic alert/media cleanup, defaulting to `90`.
+
+## Mock Websocket Feed
+
+For local testing, run the simulator from the repo root:
+
+```bash
+python3 scripts/simulate_alert_websocket.py
+```
+
+It serves `ws://127.0.0.1:8899/test` and publishes one rotating image-backed
+alert every 5 seconds.
