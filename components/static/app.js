@@ -910,6 +910,9 @@ function renderAlerts() {
   const allAlerts = state.snapshot?.alerts || [];
   syncAlertNotifications(allAlerts);
   const alerts = getFilteredAlerts();
+  const previousScrollTop = alertsList.scrollTop;
+  const previousScrollHeight = alertsList.scrollHeight;
+  const shouldPreserveScroll = previousScrollTop > 24;
   const totalAlertCount = Number.isFinite(state.snapshot?.alertsTotal)
     ? state.snapshot.alertsTotal
     : alerts.length;
@@ -967,6 +970,11 @@ function renderAlerts() {
     .join("");
 
   initializeAlertMedia();
+
+  if (shouldPreserveScroll) {
+    alertsList.scrollTop =
+      previousScrollTop + (alertsList.scrollHeight - previousScrollHeight);
+  }
 }
 
 async function loadMoreAlerts() {
