@@ -56,6 +56,19 @@ const state = {
     originTranslateY: 0,
     dragMoved: false,
   },
+  modalMapView: {
+    scale: 1,
+    minScale: 1,
+    maxScale: 5,
+    translateX: 0,
+    translateY: 0,
+    pointerId: null,
+    panStartX: 0,
+    panStartY: 0,
+    originTranslateX: 0,
+    originTranslateY: 0,
+    dragMoved: false,
+  },
 };
 
 const mapRoot = document.getElementById("map-root");
@@ -1137,22 +1150,29 @@ function renderModalAlertMap(alert) {
     confidence: alert.confidence,
     positions: alert.positions || [{ distance: alert.distanceM, angle: alert.angleDeg }],
   };
-  const width = modalAlertMap.clientWidth || 320;
-  const height = modalAlertMap.clientHeight || 240;
+  const width = modalAlertMap.clientWidth || 520;
+  const height = modalAlertMap.clientHeight || 520;
   const maxDistanceM = state.snapshot?.map?.maxDistanceM || 1000;
   const geometry = {
     width,
     height,
     originX: width / 2,
-    originY: height * 0.82,
-    radius: Math.max(80, Math.min(width * 0.45, height * 0.72)),
+    originY: height * 0.78,
+    radius: Math.max(120, Math.min(width * 0.46, height * 0.7)),
   };
   geometry.scale = geometry.radius / maxDistanceM;
+
+  const stage = document.createElement("div");
+  stage.className = "modalMapStage";
+  const overlay = document.createElement("div");
+  overlay.className = "modalMapOverlay";
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.classList.add("mapSvg");
-  modalAlertMap.appendChild(svg);
+  stage.appendChild(svg);
+  stage.appendChild(overlay);
+  modalAlertMap.appendChild(stage);
 
   const append = (tag, attributes) => {
     const node = document.createElementNS(SVG_NS, tag);
@@ -1161,12 +1181,48 @@ function renderModalAlertMap(alert) {
     return node;
   };
   append("rect", { x: 0, y: 0, width, height, fill: "#111822" });
-  [250, 500, 750, maxDistanceM].forEach((distance) => {
-    append("path", {
-      d: createArcPath(geometry.originX, geometry.originY, distance * geometry.scale, -90, 90, true),
-      class: "ringOutline",
-    });
+  append("path", {
+    d: createArcPath(geometry.originX, geometry.originY, geometry.radius, -90, 90, true),
+    class: "frontWedge",
   });
+  append("path", {
+    d: createArcPath(geometry.originX, geometry.originY, geometry.radius * 0.55, 90, 270, true),
+    class: "rearWedge",
+  });
+  append("line", {
+    x1: 0,
+    y1: geometry.originY,
+    x2: width,
+    y2: geometry.originY,
+    class: "originLine",
+  });
+
+  [250, 500, 750, maxDistanceM].forEach((distance, index) => {
+    const radius = distance * geometry.scale;
+    append("path", {
+      d: createArcPath(geometry.originX, geometry.originY, radius, -90, 90, true),
+      class: `ringOutline ${index === 0 ? "inner" : ""}`.trim(),
+    });
+    const label = append("text", {
+      x: geometry.originX,
+      y: geometry.originY - radius + 14,
+      "text-anchor": "middle",
+      class: "mapDistanceLabel",
+    });
+    label.textContent = `${distance}m`;
+  });
+
+  const camera = document.createElement("div");
+  camera.className = "cameraMarker";
+  camera.style.left = `${geometry.originX}px`;
+  camera.style.top = `${geometry.originY}px`;
+  camera.innerHTML = `
+    <div class="cameraIconWrapper">
+      <img class="cameraIcon" src="/static/assets/camera-icon.svg" alt="Camera" />
+    </div>
+  `;
+  overlay.appendChild(camera);
+
   const points = (track.positions || []).map((position) =>
     polarToPoint(position.distance, position.angle, geometry, maxDistanceM),
   );
@@ -1175,16 +1231,108 @@ function renderModalAlertMap(alert) {
       points: points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" "),
       class: "trackTrail",
       fill: "none",
+      opacity: "1",
     });
   }
-  points.forEach((point, index) => {
+  points.slice(0, -1).forEach((point) => {
     append("circle", {
       cx: point.x.toFixed(2),
       cy: point.y.toFixed(2),
-      r: index === points.length - 1 ? 7 : 3,
-      class: index === points.length - 1 ? "trackDot current" : "trackDot",
+      r: 4,
+      class: "trackDot",
     });
   });
+  const current = points[points.length - 1];
+  if (current) {
+    const bearingClass = track.bearing.toLowerCase().replaceAll(" ", "-");
+    const marker = document.createElement("div");
+    marker.className = "trackedObjectMarker modalTrackedObjectMarker";
+    marker.style.left = `${current.x}px`;
+    marker.style.top = `${current.y}px`;
+    marker.title = `${track.typeLabel} #${track.trackId} | ${track.bearing} | ${track.confidence}%`;
+    marker.innerHTML = `
+      <div class="trackedObjectContent">
+        <div class="trackedObjectId">#${escapeHtml(track.trackId)}</div>
+        <div class="trackedObjectVisual bearing-${escapeHtml(bearingClass)}">
+          <div class="trackedObjectBubble">
+            <div class="markerIconInLabel">
+              <img src="/static/assets/${escapeHtml(track.type)}.svg" class="trackedObjectIcon" alt="${escapeHtml(track.typeLabel)}" />
+            </div>
+            <span class="trackedObjectDistance">${Math.round(track.positions[track.positions.length - 1].distance)}m</span>
+          </div>
+          ${renderBearingArrowMarkup(track.bearing)}
+        </div>
+      </div>
+    `;
+    overlay.appendChild(marker);
+  }
+  applyModalMapTransform();
+}
+
+function clampModalMapTranslation(scale, translateX, translateY) {
+  const width = modalAlertMap.clientWidth || 1;
+  const height = modalAlertMap.clientHeight || 1;
+  const scaledWidth = width * scale;
+  const scaledHeight = height * scale;
+  const minX = scaledWidth > width ? width - scaledWidth : (width - scaledWidth) / 2;
+  const maxX = scaledWidth > width ? 0 : (width - scaledWidth) / 2;
+  const minY = scaledHeight > height ? height - scaledHeight : (height - scaledHeight) / 2;
+  const maxY = scaledHeight > height ? 0 : (height - scaledHeight) / 2;
+  return {
+    x: Math.min(maxX, Math.max(minX, translateX)),
+    y: Math.min(maxY, Math.max(minY, translateY)),
+  };
+}
+
+function applyModalMapTransform() {
+  const stage = modalAlertMap?.querySelector(".modalMapStage");
+  if (!stage) {
+    return;
+  }
+  const { scale, translateX, translateY } = state.modalMapView;
+  const clamped = clampModalMapTranslation(scale, translateX, translateY);
+  state.modalMapView.translateX = clamped.x;
+  state.modalMapView.translateY = clamped.y;
+  stage.style.transform = `translate(${clamped.x}px, ${clamped.y}px) scale(${scale})`;
+  modalAlertMap.style.setProperty("--marker-scale", (1.12 / scale).toFixed(3));
+}
+
+function zoomModalMap(clientX, clientY, nextScale) {
+  if (!modalAlertMap || !modalAlertMap.querySelector(".modalMapStage")) {
+    return;
+  }
+  const rect = modalAlertMap.getBoundingClientRect();
+  const px = clientX - rect.left;
+  const py = clientY - rect.top;
+  const { scale, translateX, translateY, minScale, maxScale } = state.modalMapView;
+  const clampedScale = Math.min(maxScale, Math.max(minScale, nextScale));
+  if (clampedScale === scale) {
+    return;
+  }
+  const worldX = (px - translateX) / scale;
+  const worldY = (py - translateY) / scale;
+  state.modalMapView.scale = clampedScale;
+  state.modalMapView.translateX = px - worldX * clampedScale;
+  state.modalMapView.translateY = py - worldY * clampedScale;
+  applyModalMapTransform();
+}
+
+function resetModalMapView() {
+  state.modalMapView.scale = 1;
+  state.modalMapView.translateX = 0;
+  state.modalMapView.translateY = 0;
+  applyModalMapTransform();
+}
+
+function stopModalMapPan(event) {
+  if (state.modalMapView.pointerId !== event.pointerId) {
+    return;
+  }
+  if (modalAlertMap.hasPointerCapture(event.pointerId)) {
+    modalAlertMap.releasePointerCapture(event.pointerId);
+  }
+  state.modalMapView.pointerId = null;
+  modalAlertMap.classList.remove("isPanning");
 }
 
 function renderModalToggle(alert) {
@@ -1398,6 +1546,7 @@ function closeModal() {
   state.modalView = null;
   state.modalImageView.sourceKey = null;
   resetModalImageView();
+  resetModalMapView();
   renderModalAlertMap(null);
   modalOverlay.hidden = true;
   modalOverlay.setAttribute("aria-hidden", "true");
@@ -1734,6 +1883,59 @@ modalImageContainer.addEventListener("dblclick", (event) => {
   resetModalZoom();
 });
 
+modalAlertMap.addEventListener(
+  "wheel",
+  (event) => {
+    if (modalOverlay.hidden) {
+      return;
+    }
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+    zoomModalMap(event.clientX, event.clientY, state.modalMapView.scale * delta);
+  },
+  { passive: false },
+);
+
+modalAlertMap.addEventListener("pointerdown", (event) => {
+  if (modalOverlay.hidden || event.button !== 0) {
+    return;
+  }
+  event.preventDefault();
+  state.modalMapView.pointerId = event.pointerId;
+  state.modalMapView.panStartX = event.clientX;
+  state.modalMapView.panStartY = event.clientY;
+  state.modalMapView.originTranslateX = state.modalMapView.translateX;
+  state.modalMapView.originTranslateY = state.modalMapView.translateY;
+  state.modalMapView.dragMoved = false;
+  modalAlertMap.classList.add("isPanning");
+  modalAlertMap.setPointerCapture(event.pointerId);
+});
+
+modalAlertMap.addEventListener("pointermove", (event) => {
+  if (state.modalMapView.pointerId !== event.pointerId) {
+    return;
+  }
+  const dx = event.clientX - state.modalMapView.panStartX;
+  const dy = event.clientY - state.modalMapView.panStartY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+    state.modalMapView.dragMoved = true;
+  }
+  if (!state.modalMapView.dragMoved || state.modalMapView.scale <= 1) {
+    return;
+  }
+  state.modalMapView.translateX = state.modalMapView.originTranslateX + dx;
+  state.modalMapView.translateY = state.modalMapView.originTranslateY + dy;
+  applyModalMapTransform();
+});
+
+modalAlertMap.addEventListener("pointerup", stopModalMapPan);
+modalAlertMap.addEventListener("pointercancel", stopModalMapPan);
+
+modalAlertMap.addEventListener("dblclick", (event) => {
+  event.preventDefault();
+  resetModalMapView();
+});
+
 modalImage.addEventListener("load", updateModalLayout);
 modalImage.addEventListener("error", () => {
   const alert = getAlertById(state.modalAlertId);
@@ -1766,6 +1968,7 @@ window.addEventListener("keydown", unlockAlertAudio);
 
 window.addEventListener("resize", () => {
   renderMap();
+  renderModalAlertMap(getAlertById(state.modalAlertId));
   updateModalLayout();
 });
 
