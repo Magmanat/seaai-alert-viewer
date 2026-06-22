@@ -174,6 +174,10 @@ def serialize_alert(event: AlertEvent) -> dict[str, Any]:
         "confidence": event.confidence_percent,
         "distanceM": round(event.current_position.distance),
         "angleDeg": round(event.current_position.angle, 1),
+        "positions": [
+            {"distance": round(position.distance, 2), "angle": round(position.angle, 2)}
+            for position in event.positions
+        ],
         "timestampMs": event.timestamp_ms,
         "timestampIso": event.timestamp_iso,
         "rgbUrl": rgb_url,

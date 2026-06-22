@@ -11,6 +11,15 @@ const state = {
   alertAudioReady: false,
   upstreamUrl: "",
   demoAlertIndex: 0,
+  session: {
+    mode: "lite",
+    user: null,
+    canDemo: true,
+    canClear: true,
+    canConfigureWebsocket: true,
+    canManageUsers: false,
+  },
+  isLoadingMoreAlerts: false,
   filters: {
     bearing: new Set(),
     type: new Set(),
@@ -66,11 +75,18 @@ const trackCount = document.getElementById("track-count");
 const statusPill = document.getElementById("status-pill");
 const statusLabel = document.getElementById("status-label");
 const lastMessage = document.getElementById("last-message");
+const adminPanel = document.getElementById("admin-panel");
+const createUserForm = document.getElementById("create-user-form");
+const newUsernameInput = document.getElementById("new-username");
+const newPasswordInput = document.getElementById("new-password");
+const usersList = document.getElementById("users-list");
+const logoutButton = document.getElementById("logout-button");
 
 const modalOverlay = document.getElementById("alert-modal");
 const modalClose = document.getElementById("modal-close");
 const modalViewToggle = document.getElementById("modal-view-toggle");
 const modalImageContainer = document.getElementById("modal-image-container");
+const modalAlertMap = document.getElementById("modal-alert-map");
 const modalZoomWrapper = document.getElementById("modal-zoom-wrapper");
 const modalImage = document.getElementById("modal-image");
 const modalBoundingBox = document.getElementById("modal-bounding-box");
@@ -311,6 +327,111 @@ function updateStatus(snapshot) {
   clearAlertsButton.disabled = !snapshot?.alerts?.length;
 }
 
+function applyViewerPermissions(snapshot = null) {
+  const viewer = snapshot?.viewer || {};
+  state.session = {
+    ...state.session,
+    ...viewer,
+  };
+  const canDemo = state.session.canDemo !== false;
+  const canClear = state.session.canClear !== false;
+  const canConfigureWebsocket = state.session.canConfigureWebsocket !== false;
+  const canManageUsers = Boolean(state.session.canManageUsers);
+
+  pushDemoAlertButton.hidden = !canDemo;
+  clearAlertsButton.hidden = !canClear;
+  upstreamUrlInput.disabled = !canConfigureWebsocket;
+  applyUpstreamUrlButton.hidden = !canConfigureWebsocket;
+  if (!canConfigureWebsocket) {
+    upstreamUrlInput.title = "Only admin users can change the upstream websocket URL";
+  }
+  if (adminPanel) {
+    adminPanel.hidden = !canManageUsers;
+  }
+  if (canManageUsers) {
+    void loadUsers();
+  }
+}
+
+async function loadSession() {
+  try {
+    const response = await fetch("/api/session");
+    if (!response.ok) {
+      return;
+    }
+    const session = await response.json();
+    state.session = {
+      ...state.session,
+      ...session,
+    };
+    applyViewerPermissions();
+  } catch {
+    applyViewerPermissions();
+  }
+}
+
+async function loadUsers() {
+  if (!usersList || !state.session.canManageUsers) {
+    return;
+  }
+  const response = await fetch("/api/admin/users");
+  if (!response.ok) {
+    return;
+  }
+  const payload = await response.json();
+  const users = Array.isArray(payload.users) ? payload.users : [];
+  usersList.innerHTML = users
+    .map(
+      (user) => `
+        <div class="userRow" data-user-id="${escapeHtml(user.id)}">
+          <span>${escapeHtml(user.username)} <span class="userRole">${escapeHtml(user.role)}</span></span>
+          ${user.role === "admin" ? "" : '<button class="headerActionButton deleteUserButton" type="button">Delete</button>'}
+        </div>
+      `,
+    )
+    .join("");
+}
+
+async function createUser(event) {
+  event.preventDefault();
+  if (!state.session.canManageUsers) {
+    return;
+  }
+  const username = newUsernameInput.value.trim();
+  const password = newPasswordInput.value;
+  const response = await fetch("/api/admin/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!response.ok) {
+    window.alert("Failed to create user. Use a unique username and 8+ char password.");
+    return;
+  }
+  newUsernameInput.value = "";
+  newPasswordInput.value = "";
+  await loadUsers();
+}
+
+async function deleteUser(userId) {
+  if (!state.session.canManageUsers) {
+    return;
+  }
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    window.alert("Failed to delete user");
+    return;
+  }
+  await loadUsers();
+}
+
+async function logout() {
+  await fetch("/api/logout", { method: "POST" });
+  window.location.href = "/login";
+}
+
 function matchesFilterValue(activeSet, value) {
   return activeSet.size === 0 || activeSet.has(value);
 }
@@ -350,6 +471,10 @@ async function loadUpstreamUrl() {
 }
 
 async function applyUpstreamUrl() {
+  if (state.session.canConfigureWebsocket === false) {
+    return;
+  }
+
   const nextUrl = normalizeUpstreamUrl(upstreamUrlInput.value);
   state.upstreamUrl = nextUrl;
   updateUpstreamUrlInput();
@@ -386,6 +511,10 @@ async function applyUpstreamUrl() {
 }
 
 async function clearAlerts() {
+  if (state.session.canClear === false) {
+    return;
+  }
+
   if (clearAlertsButton.disabled) {
     return;
   }
@@ -418,6 +547,10 @@ async function loadSampleSnapshotDataUrl() {
 }
 
 async function pushDemoAlert() {
+  if (state.session.canDemo === false) {
+    return;
+  }
+
   if (pushDemoAlertButton.disabled) {
     return;
   }
@@ -651,6 +784,43 @@ function renderAlerts() {
     .join("");
 
   initializeAlertMedia();
+}
+
+async function loadMoreAlerts() {
+  if (state.session.mode !== "full" || state.isLoadingMoreAlerts) {
+    return;
+  }
+  const currentAlerts = state.snapshot?.alerts || [];
+  if (!state.snapshot?.hasMoreAlerts) {
+    return;
+  }
+  state.isLoadingMoreAlerts = true;
+  try {
+    const response = await fetch(
+      `/api/alerts?offset=${currentAlerts.length}&limit=${state.snapshot.alertsLimit || 30}`,
+    );
+    if (!response.ok) {
+      return;
+    }
+    const payload = await response.json();
+    const existingIds = new Set(currentAlerts.map((alert) => alert.id));
+    const nextAlerts = (payload.alerts || []).filter(
+      (alert) => !existingIds.has(alert.id),
+    );
+    state.snapshot.alerts = [...currentAlerts, ...nextAlerts];
+    state.snapshot.hasMoreAlerts = Boolean(payload.hasMore);
+    state.snapshot.alertsTotal = payload.total;
+    renderAlerts();
+  } finally {
+    state.isLoadingMoreAlerts = false;
+  }
+}
+
+function maybeLoadMoreAlerts() {
+  const remaining = alertsList.scrollHeight - alertsList.scrollTop - alertsList.clientHeight;
+  if (remaining < 160) {
+    void loadMoreAlerts();
+  }
 }
 
 function getGeometry(root, maxDistanceM) {
@@ -935,6 +1105,75 @@ function renderMap() {
     });
 }
 
+function renderModalAlertMap(alert) {
+  if (!modalAlertMap) {
+    return;
+  }
+  modalAlertMap.innerHTML = "";
+  if (!alert) {
+    return;
+  }
+  const track = (state.snapshot?.tracks || []).find(
+    (item) => item.id === alert.id || item.trackId === alert.trackId,
+  ) || {
+    id: alert.id,
+    trackId: alert.trackId,
+    type: alert.type,
+    typeLabel: alert.typeLabel,
+    bearing: alert.bearing,
+    confidence: alert.confidence,
+    positions: alert.positions || [{ distance: alert.distanceM, angle: alert.angleDeg }],
+  };
+  const width = modalAlertMap.clientWidth || 320;
+  const height = modalAlertMap.clientHeight || 240;
+  const maxDistanceM = state.snapshot?.map?.maxDistanceM || 1000;
+  const geometry = {
+    width,
+    height,
+    originX: width / 2,
+    originY: height * 0.82,
+    radius: Math.max(80, Math.min(width * 0.45, height * 0.72)),
+  };
+  geometry.scale = geometry.radius / maxDistanceM;
+
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.classList.add("mapSvg");
+  modalAlertMap.appendChild(svg);
+
+  const append = (tag, attributes) => {
+    const node = document.createElementNS(SVG_NS, tag);
+    Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
+    svg.appendChild(node);
+    return node;
+  };
+  append("rect", { x: 0, y: 0, width, height, fill: "#111822" });
+  [250, 500, 750, maxDistanceM].forEach((distance) => {
+    append("path", {
+      d: createArcPath(geometry.originX, geometry.originY, distance * geometry.scale, -90, 90, true),
+      class: "ringOutline",
+    });
+  });
+  const points = (track.positions || []).map((position) =>
+    polarToPoint(position.distance, position.angle, geometry, maxDistanceM),
+  );
+  if (points.length > 1) {
+    append("polyline", {
+      points: points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" "),
+      class: "trackTrail",
+      fill: "none",
+    });
+  }
+  points.forEach((point, index) => {
+    append("circle", {
+      cx: point.x.toFixed(2),
+      cy: point.y.toFixed(2),
+      r: index === points.length - 1 ? 7 : 3,
+      class: index === points.length - 1 ? "trackDot current" : "trackDot",
+    });
+  });
+}
+
 function renderModalToggle(alert) {
   const views = getAvailableViews(alert);
   if (views.length < 2) {
@@ -1094,6 +1333,7 @@ function renderModal() {
   }
 
   const activeMedia = getAlertMedia(alert, state.modalView);
+  renderModalAlertMap(alert);
   state.modalView = activeMedia?.view || null;
   const sourceKey = activeMedia?.url || null;
   if (state.modalImageView.sourceKey !== sourceKey) {
@@ -1145,6 +1385,7 @@ function closeModal() {
   state.modalView = null;
   state.modalImageView.sourceKey = null;
   resetModalImageView();
+  renderModalAlertMap(null);
   modalOverlay.hidden = true;
   modalOverlay.setAttribute("aria-hidden", "true");
   document.body.classList.remove("modalOpen");
@@ -1212,6 +1453,7 @@ function renderAll() {
   if (!state.snapshot) {
     return;
   }
+  applyViewerPermissions(state.snapshot);
   updateStatus(state.snapshot);
   renderAlerts();
   renderMap();
@@ -1219,6 +1461,7 @@ function renderAll() {
 }
 
 async function bootstrap() {
+  await loadSession();
   const [stateResponse, configResponse] = await Promise.all([
     fetch("/api/state"),
     fetch("/api/config/upstream-websocket"),
@@ -1276,6 +1519,22 @@ alertsList.addEventListener("click", (event) => {
 clearAlertsButton.addEventListener("click", clearAlerts);
 pushDemoAlertButton.addEventListener("click", pushDemoAlert);
 applyUpstreamUrlButton.addEventListener("click", applyUpstreamUrl);
+alertsList.addEventListener("scroll", maybeLoadMoreAlerts);
+if (createUserForm) {
+  createUserForm.addEventListener("submit", createUser);
+}
+if (usersList) {
+  usersList.addEventListener("click", (event) => {
+    const button = event.target.closest(".deleteUserButton");
+    const row = event.target.closest("[data-user-id]");
+    if (button && row?.dataset.userId) {
+      void deleteUser(row.dataset.userId);
+    }
+  });
+}
+if (logoutButton) {
+  logoutButton.addEventListener("click", logout);
+}
 filterPanel.addEventListener("change", () => {
   updateFiltersFromInputs();
   renderAll();

@@ -75,6 +75,18 @@
               <span id="status-label">Disconnected</span>
             </div>
           </div>
+          <div id="admin-panel" class="panelMeta adminPanel" hidden>
+            <div class="adminPanelHeader">
+              <span class="filterLabel">Admin Users</span>
+              <button id="logout-button" class="headerActionButton" type="button">Logout</button>
+            </div>
+            <form id="create-user-form" class="createUserForm">
+              <input id="new-username" class="upstreamUrlInput" type="text" placeholder="username" autocomplete="off" />
+              <input id="new-password" class="upstreamUrlInput" type="password" placeholder="password" autocomplete="new-password" />
+              <button class="headerActionButton" type="submit">Create</button>
+            </form>
+            <div id="users-list" class="usersList"></div>
+          </div>
           <div id="filter-panel" class="panelMeta filterPanel">
             <div class="filterGroup">
               <span class="filterLabel">Bearing</span>
@@ -145,6 +157,8 @@
           </svg>
         </button>
 
+        <div class="modalMediaLayout">
+        <div id="modal-alert-map" class="modalAlertMap"></div>
         <div id="modal-image-container" class="modalImageContainer">
           <div id="modal-zoom-wrapper" class="modalZoomWrapper" hidden>
             <img id="modal-image" class="modalImage" alt="Alert detail" />
@@ -159,6 +173,7 @@
           <div id="modal-empty" class="modalNoImage" hidden>
             No image available for this alert
           </div>
+        </div>
         </div>
       </div>
     </div>

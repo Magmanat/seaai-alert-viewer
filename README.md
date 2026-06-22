@@ -18,9 +18,25 @@ replacing it.
 ```text
 components/        Shared viewer templates, styles, JavaScript, and assets
 lite-viewer/       Developer-focused FastAPI viewer
-full-viewer/       Placeholder for the future production-oriented viewer
+full-viewer/       Production-oriented viewer with auth and persisted alerts
 requirements.txt   Python dependencies for the current viewer
 ```
+
+## Full Viewer
+
+Run the production-oriented viewer:
+
+```bash
+python3 full-viewer/main.py
+```
+
+Then open `http://127.0.0.1:8766` and sign in. The initial admin login is
+`admin` / `admin` unless `ADMIN_PASSWORD` or `--admin-password` is set before the
+first startup.
+
+The full viewer stores users/settings/alerts in SQLite and snapshot images on
+the filesystem under `full-viewer/data/`. Alerts and media older than 90 days are
+rotated out by default.
 
 ## Lite Viewer
 
