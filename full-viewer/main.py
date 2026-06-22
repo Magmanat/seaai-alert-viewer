@@ -186,21 +186,29 @@ async def timeline(
     end_ms: int | None = None,
     date: str | None = None,
     minute: int | None = None,
+    second: int | None = None,
     window_seconds: int = 60,
     _: dict[str, Any] = Depends(current_user),
 ) -> dict[str, Any]:
     clamped_window_seconds = max(60, min(window_seconds, 600))
     if end_ms is None:
         if not date:
-            end_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+            end_ms = int(datetime.now().timestamp() * 1000)
         else:
             try:
                 selected_date = datetime.strptime(date, "%Y-%m-%d").date()
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
-            clamped_minute = max(0, min(minute if minute is not None else 0, 1439))
+            now = datetime.now()
+            requested_second = second if second is not None else (minute or 0) * 60
+            max_second = (
+                now.hour * 3600 + now.minute * 60 + now.second
+                if selected_date == now.date()
+                else 86399
+            )
+            clamped_second = max(0, min(requested_second, max_second))
             start_of_day = datetime.combine(selected_date, datetime_time.min)
-            end_ms = int(start_of_day.timestamp() * 1000) + clamped_minute * 60 * 1000
+            end_ms = int(start_of_day.timestamp() * 1000) + clamped_second * 1000
     start_ms = end_ms - clamped_window_seconds * 1000
     return await persistent_state.timeline_tracks(start_ms, end_ms)
 

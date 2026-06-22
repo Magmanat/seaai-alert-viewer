@@ -48,7 +48,8 @@ Git.
 - `RETENTION_DAYS` controls automatic alert/media cleanup, defaulting to `90`.
 - The map can show 1, 2, 5, or 10 minute windows. Use the date selector and
   bottom timeline to inspect stored alerts by local-system day, then use `Live` to return
-  to the current stream.
+  to the current stream. The timeline uses second-level local system time and
+  clamps today to the current time.
 
 ## Mock Websocket Feed
 

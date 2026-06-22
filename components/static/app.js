@@ -28,7 +28,7 @@ const state = {
   mapWindowSeconds: 60,
   timelineMode: "live",
   timelineDate: "",
-  timelineMinute: 0,
+  timelineSecond: 0,
   timelineTracks: null,
   timelineLoading: false,
   timelineRequestId: 0,
@@ -342,14 +342,22 @@ function formatDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-function formatMinuteOfDay(minute) {
-  const hours = Math.floor(minute / 60);
-  const minutes = minute % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+function formatSecondOfDay(second) {
+  const clamped = Math.max(0, Math.min(second, 86399));
+  const hours = Math.floor(clamped / 3600);
+  const minutes = Math.floor((clamped % 3600) / 60);
+  const seconds = clamped % 60;
+  return [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
 }
 
-function getLocalMinuteOfDay(date = new Date()) {
-  return date.getHours() * 60 + date.getMinutes();
+function getLocalSecondOfDay(date = new Date()) {
+  return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
+}
+
+function getMaxTimelineSecond(dateKey) {
+  return dateKey === formatDateKey(new Date()) ? getLocalSecondOfDay() : 86399;
 }
 
 function formatLastMessage(snapshot) {
@@ -528,15 +536,23 @@ function updateTimelineControls() {
   if (!state.timelineDate) {
     state.timelineDate = today;
   }
+  const maxTimelineSecond = getMaxTimelineSecond(state.timelineDate);
   if (state.timelineMode === "live") {
-    state.timelineMinute = getLocalMinuteOfDay(now);
+    state.timelineSecond = maxTimelineSecond;
+  } else {
+    state.timelineSecond = Math.min(state.timelineSecond, maxTimelineSecond);
   }
-  timelineSlider.value = String(state.timelineMinute);
+  timelineSlider.max = String(maxTimelineSecond);
+  timelineSlider.value = String(state.timelineSecond);
   timelineCurrentLabel.textContent =
     state.timelineMode === "live"
-      ? `Live ${formatMinuteOfDay(state.timelineMinute)}`
-      : `${state.timelineDate} ${formatMinuteOfDay(state.timelineMinute)}`;
-  timelineLiveButton.disabled = state.timelineMode === "live";
+      ? `Live ${formatSecondOfDay(state.timelineSecond)}`
+      : `${state.timelineDate} ${formatSecondOfDay(state.timelineSecond)}`;
+  timelineLiveButton.classList.toggle("isLive", state.timelineMode === "live");
+  timelineLiveButton.setAttribute(
+    "aria-pressed",
+    state.timelineMode === "live" ? "true" : "false",
+  );
   mapWindowButtons?.querySelectorAll(".mapWindowButton").forEach((button) => {
     button.classList.toggle(
       "active",
@@ -595,7 +611,7 @@ async function loadTimelineTracks() {
   state.timelineLoading = true;
   const params = new URLSearchParams({
     date: state.timelineDate,
-    minute: String(state.timelineMinute),
+    second: String(state.timelineSecond),
     window_seconds: String(state.mapWindowSeconds),
   });
   try {
@@ -615,8 +631,8 @@ async function loadTimelineTracks() {
 function enterLiveMode() {
   state.timelineMode = "live";
   state.timelineTracks = null;
-    state.timelineDate = formatDateKey(new Date());
-  state.timelineMinute = getLocalMinuteOfDay();
+  state.timelineDate = formatDateKey(new Date());
+  state.timelineSecond = getLocalSecondOfDay();
   if (timelineDateSelect) {
     timelineDateSelect.value = state.timelineDate;
   }
@@ -624,10 +640,10 @@ function enterLiveMode() {
   renderMap();
 }
 
-function enterHistoryMode(date, minute) {
+function enterHistoryMode(date, second) {
   state.timelineMode = "history";
   state.timelineDate = date;
-  state.timelineMinute = minute;
+  state.timelineSecond = Math.min(Math.max(0, second), getMaxTimelineSecond(date));
   updateTimelineControls();
   scheduleTimelineLoad();
 }
@@ -1982,7 +1998,10 @@ mapWindowButtons?.addEventListener("click", (event) => {
   }
 });
 timelineDateSelect?.addEventListener("change", () => {
-  enterHistoryMode(timelineDateSelect.value, Number(timelineSlider.value) || 0);
+  enterHistoryMode(
+    timelineDateSelect.value,
+    Math.min(Number(timelineSlider.value) || 0, getMaxTimelineSecond(timelineDateSelect.value)),
+  );
 });
 timelineSlider?.addEventListener("input", () => {
   enterHistoryMode(
@@ -2281,10 +2300,25 @@ window.addEventListener("resize", () => {
   updateModalLayout();
 });
 
+function advanceHistoryTimeline() {
+  if (state.timelineMode !== "history") {
+    return;
+  }
+  const maxTimelineSecond = getMaxTimelineSecond(state.timelineDate);
+  if (state.timelineSecond >= maxTimelineSecond) {
+    updateTimelineControls();
+    return;
+  }
+  state.timelineSecond += 1;
+  updateTimelineControls();
+  scheduleTimelineLoad();
+}
+
 window.setInterval(() => {
   if (!state.snapshot) {
     return;
   }
+  advanceHistoryTimeline();
   updateTimelineControls();
   updateStatus(state.snapshot);
   renderMap();
