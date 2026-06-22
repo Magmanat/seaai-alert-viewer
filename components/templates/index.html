@@ -135,17 +135,25 @@
             </div>
           </div>
           <div id="alert-time-filter" class="panelMeta alertTimeFilter">
-            <span class="filterLabel">Time</span>
-            <label class="timeFilterField">
-              <span>Start</span>
-              <input id="alert-start-time" type="datetime-local" />
-            </label>
-            <label class="timeFilterField">
-              <span>End</span>
-              <input id="alert-end-time" type="datetime-local" />
-            </label>
-            <button id="apply-alert-time-filter" class="headerActionButton" type="button">Apply</button>
-            <button id="clear-alert-time-filter" class="headerActionButton" type="button">Clear</button>
+            <div class="alertTimeFilterHeader">
+              <span class="filterLabel">Time</span>
+              <div class="alertTimeFilterActions">
+                <button id="apply-alert-time-filter" class="headerActionButton" type="button">Apply</button>
+                <button id="clear-alert-time-filter" class="headerActionButton" type="button">Clear</button>
+              </div>
+            </div>
+            <div class="timeFilterRows">
+              <label class="timeFilterField">
+                <span>Start</span>
+                <input id="alert-start-date" type="date" />
+                <input id="alert-start-time" type="time" step="1" />
+              </label>
+              <label class="timeFilterField">
+                <span>End</span>
+                <input id="alert-end-date" type="date" />
+                <input id="alert-end-time" type="time" step="1" />
+              </label>
+            </div>
           </div>
           <div class="panelMeta">
             <span id="last-message">No messages received yet</span>

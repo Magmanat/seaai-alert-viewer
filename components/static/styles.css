@@ -331,15 +331,31 @@ body.modalOpen {
 
 .alertTimeFilter {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
-  align-items: end;
+  gap: 8px;
+}
+
+.alertTimeFilterHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.alertTimeFilterActions {
+  display: flex;
+  gap: 6px;
+}
+
+.timeFilterRows {
+  display: grid;
   gap: 8px;
 }
 
 .timeFilterField {
   display: grid;
-  gap: 4px;
-  min-width: 0;
+  grid-template-columns: 44px minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 6px;
   color: var(--text-muted);
   font-size: 10px;
   text-transform: uppercase;
@@ -355,6 +371,10 @@ body.modalOpen {
   color: var(--text-secondary);
   padding: 6px 7px;
   font-size: 11px;
+}
+
+.timeFilterField input[type="time"] {
+  font-variant-numeric: tabular-nums;
 }
 
 .filterGroup {

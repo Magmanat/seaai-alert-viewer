@@ -115,7 +115,9 @@ const newUsernameInput = document.getElementById("new-username");
 const newPasswordInput = document.getElementById("new-password");
 const usersList = document.getElementById("users-list");
 const logoutButton = document.getElementById("logout-button");
+const alertStartDateInput = document.getElementById("alert-start-date");
 const alertStartTimeInput = document.getElementById("alert-start-time");
+const alertEndDateInput = document.getElementById("alert-end-date");
 const alertEndTimeInput = document.getElementById("alert-end-time");
 const applyAlertTimeFilterButton = document.getElementById("apply-alert-time-filter");
 const clearAlertTimeFilterButton = document.getElementById("clear-alert-time-filter");
@@ -537,12 +539,13 @@ function getFilteredAlerts() {
   return alerts.filter(matchesActiveFilters);
 }
 
-function parseLocalDateTimeInput(input) {
-  const value = input?.value;
-  if (!value) {
+function parseLocalDateTimeInputs(dateInput, timeInput, fallbackTime) {
+  const dateValue = dateInput?.value;
+  if (!dateValue) {
     return null;
   }
-  const date = new Date(value);
+  const timeValue = timeInput?.value || fallbackTime;
+  const date = new Date(`${dateValue}T${timeValue}`);
   return Number.isNaN(date.getTime()) ? null : date.getTime();
 }
 
@@ -583,8 +586,16 @@ async function reloadAlertPage() {
 }
 
 async function applyAlertTimeFilter() {
-  const startMs = parseLocalDateTimeInput(alertStartTimeInput);
-  const endMs = parseLocalDateTimeInput(alertEndTimeInput);
+  const startMs = parseLocalDateTimeInputs(
+    alertStartDateInput,
+    alertStartTimeInput,
+    "00:00:00",
+  );
+  const endMs = parseLocalDateTimeInputs(
+    alertEndDateInput,
+    alertEndTimeInput,
+    "23:59:59",
+  );
   if (startMs !== null && endMs !== null && startMs > endMs) {
     window.alert("Start time must be before end time");
     return;
@@ -599,7 +610,9 @@ async function clearAlertTimeFilter() {
   state.alertTimeFilterStartMs = null;
   state.alertTimeFilterEndMs = null;
   state.alertTimeFilterActive = false;
+  if (alertStartDateInput) alertStartDateInput.value = "";
   if (alertStartTimeInput) alertStartTimeInput.value = "";
+  if (alertEndDateInput) alertEndDateInput.value = "";
   if (alertEndTimeInput) alertEndTimeInput.value = "";
   await reloadAlertPage();
 }
@@ -2142,7 +2155,7 @@ applyAlertTimeFilterButton?.addEventListener("click", () => {
 clearAlertTimeFilterButton?.addEventListener("click", () => {
   void clearAlertTimeFilter();
 });
-[alertStartTimeInput, alertEndTimeInput].forEach((input) => {
+[alertStartDateInput, alertStartTimeInput, alertEndDateInput, alertEndTimeInput].forEach((input) => {
   input?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
