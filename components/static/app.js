@@ -1819,6 +1819,33 @@ function renderAll() {
   renderModal();
 }
 
+function mergeIncomingSnapshot(nextSnapshot) {
+  if (
+    nextSnapshot?.viewer?.mode !== "full" ||
+    !Array.isArray(nextSnapshot.alerts) ||
+    !Array.isArray(state.snapshot?.alerts)
+  ) {
+    return nextSnapshot;
+  }
+
+  const incomingIds = new Set(
+    nextSnapshot.alerts.map((alert) => String(alert.id)),
+  );
+  const retainedOlderAlerts = state.snapshot.alerts.filter(
+    (alert) => !incomingIds.has(String(alert.id)),
+  );
+  const mergedAlerts = [...nextSnapshot.alerts, ...retainedOlderAlerts];
+  const total = Number.isFinite(nextSnapshot.alertsTotal)
+    ? nextSnapshot.alertsTotal
+    : mergedAlerts.length;
+
+  return {
+    ...nextSnapshot,
+    alerts: mergedAlerts.slice(0, total),
+    hasMoreAlerts: mergedAlerts.length < total || Boolean(nextSnapshot.hasMoreAlerts),
+  };
+}
+
 async function bootstrap() {
   await loadSession();
   await loadTimelineDates();
@@ -1880,7 +1907,7 @@ function connectSocket() {
 
   socket.addEventListener("message", (event) => {
     state.uiSocketLastMessageAt = Date.now();
-    state.snapshot = JSON.parse(event.data);
+    state.snapshot = mergeIncomingSnapshot(JSON.parse(event.data));
     renderAll();
   });
 
