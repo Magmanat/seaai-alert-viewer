@@ -906,13 +906,43 @@ function initializeAlertMedia() {
   });
 }
 
+function getAlertScrollAnchor() {
+  const scrollTop = alertsList.scrollTop;
+  const cards = Array.from(alertsList.querySelectorAll("[data-alert-id]"));
+  const anchor = cards.find(
+    (card) => card.offsetTop + card.offsetHeight >= scrollTop,
+  );
+  if (!anchor) {
+    return null;
+  }
+  return {
+    alertId: anchor.dataset.alertId,
+    offsetFromScrollTop: anchor.offsetTop - scrollTop,
+  };
+}
+
+function restoreAlertScrollAnchor(anchor, fallbackScrollTop) {
+  if (!anchor?.alertId) {
+    alertsList.scrollTop = fallbackScrollTop;
+    return;
+  }
+  const nextAnchor = Array.from(
+    alertsList.querySelectorAll("[data-alert-id]"),
+  ).find((card) => card.dataset.alertId === anchor.alertId);
+  if (!nextAnchor) {
+    alertsList.scrollTop = fallbackScrollTop;
+    return;
+  }
+  alertsList.scrollTop = nextAnchor.offsetTop - anchor.offsetFromScrollTop;
+}
+
 function renderAlerts() {
   const allAlerts = state.snapshot?.alerts || [];
   syncAlertNotifications(allAlerts);
   const alerts = getFilteredAlerts();
   const previousScrollTop = alertsList.scrollTop;
-  const previousScrollHeight = alertsList.scrollHeight;
   const shouldPreserveScroll = previousScrollTop > 24;
+  const scrollAnchor = shouldPreserveScroll ? getAlertScrollAnchor() : null;
   const totalAlertCount = Number.isFinite(state.snapshot?.alertsTotal)
     ? state.snapshot.alertsTotal
     : alerts.length;
@@ -972,8 +1002,7 @@ function renderAlerts() {
   initializeAlertMedia();
 
   if (shouldPreserveScroll) {
-    alertsList.scrollTop =
-      previousScrollTop + (alertsList.scrollHeight - previousScrollHeight);
+    restoreAlertScrollAnchor(scrollAnchor, previousScrollTop);
   }
 }
 
